@@ -25,7 +25,6 @@ Capstone Website/
     │   ├── dashboard.html              # Admin Dashboard (Sidebar, Top Logo, Search Bar)
     │   ├── login.html                  # Admin Login Screen with OTP verification
     │   └── logo.html                   # Logo Splash Screen (links to login.html)
-    ├── .gitignore                      # Git ignore rules (node_modules, logs, etc.)
     ├── index.html                      # Entry point (auto-redirect to pages/logo.html)
     ├── package.json                    # Node dependencies and scripts
     ├── package-lock.json               # Locked dependency tree
