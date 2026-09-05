@@ -4,14 +4,17 @@
  * Description: Express.js server connecting to MySQL for Admin Login & OTP.  
  */
 
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const db = require('./database/db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'tres_marias_c4t3r1ng_s3cur3_jwt_t0k3n_k3y_9824_vps_2026';
 
 // Middlewares
 app.use(cors());
@@ -91,42 +94,76 @@ app.post('/api/check-lockout', async (req, res) => {
   try {
     const { usernameOrEmail } = req.body;
     if (!usernameOrEmail) {
-      return res.json({ locked: false });
+      return res.json({ locked: false, otpLocked: false });
     }
 
     const [rows] = await db.query(
-      `SELECT user_id, failed_login_attempts, lockout_until 
+      `SELECT user_id, failed_login_attempts, lockout_until, failed_otp_attempts, otp_lockout_until 
        FROM users 
        WHERE (email = ? OR full_name = ?) 
        LIMIT 1`,
       [usernameOrEmail.trim(), usernameOrEmail.trim()]
     );
 
-    if (rows.length === 0 || !rows[0].lockout_until) {
-      return res.json({ locked: false });
+    if (rows.length === 0) {
+      return res.json({ locked: false, otpLocked: false });
     }
 
     const user = rows[0];
-    const lockExpiry = new Date(user.lockout_until).getTime();
     const now = Date.now();
+    let isAccountLocked = false;
+    let accountLockRemaining = 0;
+    let isOtpLocked = false;
+    let otpLockRemaining = 0;
 
-    if (lockExpiry > now) {
-      const remainingSeconds = Math.ceil((lockExpiry - now) / 1000);
+    // Check account lockout (5-minute lock after 5 failed passwords)
+    if (user.lockout_until) {
+      const lockExpiry = new Date(user.lockout_until).getTime();
+      if (lockExpiry > now) {
+        isAccountLocked = true;
+        accountLockRemaining = Math.ceil((lockExpiry - now) / 1000);
+      } else {
+        await db.query(
+          'UPDATE users SET failed_login_attempts = 0, lockout_until = NULL WHERE user_id = ?',
+          [user.user_id]
+        );
+      }
+    }
+
+    // Check OTP lockout (2-minute lock after 5 failed OTP attempts per REQ-007)
+    if (user.otp_lockout_until) {
+      const otpLockExpiry = new Date(user.otp_lockout_until).getTime();
+      if (otpLockExpiry > now) {
+        isOtpLocked = true;
+        otpLockRemaining = Math.ceil((otpLockExpiry - now) / 1000);
+      } else {
+        await db.query(
+          'UPDATE users SET failed_otp_attempts = 0, otp_lockout_until = NULL WHERE user_id = ?',
+          [user.user_id]
+        );
+      }
+    }
+
+    if (isAccountLocked) {
       return res.json({
         locked: true,
-        lockRemainingSeconds: remainingSeconds,
-        message: `Account is temporarily locked. Try again in ${formatRemainingTime(remainingSeconds)}.`
+        lockRemainingSeconds: accountLockRemaining,
+        message: `Account is temporarily locked due to 5 failed login attempts. Try again in ${formatRemainingTime(accountLockRemaining)}.`
       });
-    } else {
-      // Lockout duration has expired; reset
-      await db.query(
-        'UPDATE users SET failed_login_attempts = 0, lockout_until = NULL WHERE user_id = ?',
-        [user.user_id]
-      );
-      return res.json({ locked: false });
     }
+
+    if (isOtpLocked) {
+      return res.json({
+        locked: false,
+        otpLocked: true,
+        otpLockRemainingSeconds: otpLockRemaining,
+        message: `OTP entry is locked due to 5 failed OTP attempts. Try again in ${formatRemainingTime(otpLockRemaining)}.`
+      });
+    }
+
+    return res.json({ locked: false, otpLocked: false });
   } catch (err) {
-    return res.json({ locked: false });
+    return res.json({ locked: false, otpLocked: false });
   }
 });
 
@@ -146,7 +183,7 @@ app.post('/api/send-otp', async (req, res) => {
 
     // Find admin in the database
     const [users] = await db.query(
-      `SELECT user_id, full_name, email, phone_number, role, lockout_until 
+      `SELECT user_id, full_name, email, phone_number, role, lockout_until, otp_lockout_until 
        FROM users 
        WHERE (email = ? OR full_name = ?) AND role IN ('admin', 'staff')
        LIMIT 1`,
@@ -162,11 +199,11 @@ app.post('/api/send-otp', async (req, res) => {
     }
 
     const admin = users[0];
+    const now = Date.now();
 
-    // Check if account is currently locked out
+    // Check if account is currently locked out (Password brute-force)
     if (admin.lockout_until) {
       const lockExpiry = new Date(admin.lockout_until).getTime();
-      const now = Date.now();
 
       if (lockExpiry > now) {
         const remainingSeconds = Math.ceil((lockExpiry - now) / 1000);
@@ -185,22 +222,43 @@ app.post('/api/send-otp', async (req, res) => {
       }
     }
 
+    // Check if OTP entry is currently locked out (5 failed OTP attempts - 2-minute lockout per REQ-007)
+    if (admin.otp_lockout_until) {
+      const otpLockExpiry = new Date(admin.otp_lockout_until).getTime();
+
+      if (otpLockExpiry > now) {
+        const remainingSeconds = Math.ceil((otpLockExpiry - now) / 1000);
+        return res.status(423).json({
+          success: false,
+          otpLocked: true,
+          lockRemainingSeconds: remainingSeconds,
+          message: `OTP entry is locked due to 5 consecutive failed OTP attempts. Please try again in ${formatRemainingTime(remainingSeconds)}.`
+        });
+      } else {
+        // OTP Lockout expired; reset OTP lockout state
+        await db.query(
+          'UPDATE users SET failed_otp_attempts = 0, otp_lockout_until = NULL WHERE user_id = ?',
+          [admin.user_id]
+        );
+      }
+    }
+
     // Generate a new 4-digit OTP code (Example: 4821)
     const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
-    // Save the new OTP to the MySQL database (valid for 10 minutes)
+    // Save the new OTP to the MySQL database (valid for 5 minutes per REQ-004)
     await db.query(
       `UPDATE users 
-       SET otp_code = ?, otp_expires_at = DATE_ADD(NOW(), INTERVAL 10 MINUTE) 
+       SET otp_code = ?, otp_expires_at = DATE_ADD(NOW(), INTERVAL 5 MINUTE) 
        WHERE user_id = ?`,
       [newOtp, admin.user_id]
     );
 
-    console.log(`[OTP GENERATED] for Admin ${admin.email}: ${newOtp}`);
+    console.log(`[OTP GENERATED] for Admin ${admin.email}: ${newOtp} (Expires in 5 minutes)`);
 
     return res.json({
       success: true,
-      message: `OTP sent to the account of ${admin.full_name}.`,
+      message: `OTP sent to the account of ${admin.full_name}. Valid for 5 minutes.`,
       // Return generated OTP in demo mode for quick testing without SMS gateway
       demoOtp: newOtp
     });
@@ -246,7 +304,8 @@ app.post('/api/login', async (req, res) => {
 
     // 1. Query MySQL database for user
     const [rows] = await db.query(
-      `SELECT user_id, full_name, email, password_hash, role, otp_code, otp_expires_at, status, failed_login_attempts, lockout_until 
+      `SELECT user_id, full_name, email, password_hash, role, otp_code, otp_expires_at, status, 
+              failed_login_attempts, lockout_until, failed_otp_attempts, otp_lockout_until 
        FROM users 
        WHERE (email = ? OR full_name = ?) 
        LIMIT 1`,
@@ -280,7 +339,7 @@ app.post('/api/login', async (req, res) => {
       });
     }
 
-    // 4. Check Account Lockout Status
+    // 4a. Check Account Lockout Status (Password brute-force: 5 minutes per user specification)
     if (user.lockout_until) {
       const lockExpiry = new Date(user.lockout_until).getTime();
       const now = Date.now();
@@ -304,20 +363,142 @@ app.post('/api/login', async (req, res) => {
       }
     }
 
-    // 5. Verify Password using bcrypt hash
+    // 4b. Check OTP Lockout Status (REQ-007: 2 minutes lock after 5 failed OTP attempts)
+    if (user.otp_lockout_until) {
+      const otpLockExpiry = new Date(user.otp_lockout_until).getTime();
+      const now = Date.now();
+
+      if (otpLockExpiry > now) {
+        const remainingSeconds = Math.ceil((otpLockExpiry - now) / 1000);
+        return res.status(423).json({
+          success: false,
+          otpLocked: true,
+          lockRemainingSeconds: remainingSeconds,
+          field: 'otp',
+          message: `OTP entry is temporarily locked due to 5 consecutive failed OTP attempts. Please try again in ${formatRemainingTime(remainingSeconds)}.`
+        });
+      } else {
+        // OTP lock period has expired, reset counter
+        await db.query(
+          'UPDATE users SET failed_otp_attempts = 0, otp_lockout_until = NULL WHERE user_id = ?',
+          [user.user_id]
+        );
+        user.failed_otp_attempts = 0;
+        user.otp_lockout_until = null;
+      }
+    }
+
+    // 5. Check Password Validity
     let isPasswordValid = false;
     if (user.password_hash && (user.password_hash.startsWith('$2y$') || user.password_hash.startsWith('$2a$') || user.password_hash.startsWith('$2b$'))) {
-      // Convert PHP $2y$ blowfish to $2a$ for bcryptjs compatibility if from phpMyAdmin
       const normalizedHash = user.password_hash.replace('$2y$', '$2a$');
       isPasswordValid = await bcrypt.compare(password, normalizedHash);
     }
 
-    // If password is incorrect: track failed attempts and trigger lockout at 5 attempts
+    // 6. Check OTP Validity and Expiration (REQ-004: 5-minute expiration limit)
+    let isOtpValid = false;
+    let isOtpExpired = false;
+    if (user.otp_expires_at && new Date(user.otp_expires_at).getTime() < Date.now()) {
+      isOtpExpired = true;
+    } else if (user.otp_code && user.otp_code.trim() === otp.trim()) {
+      isOtpValid = true;
+    }
+
+    // CASE A: BOTH Password and OTP are INVALID
+    if (!isPasswordValid && !isOtpValid) {
+      const newPasswordAttempts = (user.failed_login_attempts || 0) + 1;
+      const newOtpAttempts = (user.failed_otp_attempts || 0) + 1;
+
+      const isPasswordLocked = newPasswordAttempts >= 5;
+      const isOtpLocked = newOtpAttempts >= 5;
+
+      // Update both attempt counters in MySQL
+      if (isPasswordLocked && isOtpLocked) {
+        await db.query(
+          `UPDATE users 
+           SET failed_login_attempts = ?, lockout_until = DATE_ADD(NOW(), INTERVAL 5 MINUTE),
+               failed_otp_attempts = ?, otp_lockout_until = DATE_ADD(NOW(), INTERVAL 2 MINUTE) 
+           WHERE user_id = ?`,
+          [newPasswordAttempts, newOtpAttempts, user.user_id]
+        );
+      } else if (isPasswordLocked) {
+        await db.query(
+          `UPDATE users 
+           SET failed_login_attempts = ?, lockout_until = DATE_ADD(NOW(), INTERVAL 5 MINUTE),
+               failed_otp_attempts = ? 
+           WHERE user_id = ?`,
+          [newPasswordAttempts, newOtpAttempts, user.user_id]
+        );
+      } else if (isOtpLocked) {
+        await db.query(
+          `UPDATE users 
+           SET failed_login_attempts = ?,
+               failed_otp_attempts = ?, otp_lockout_until = DATE_ADD(NOW(), INTERVAL 2 MINUTE) 
+           WHERE user_id = ?`,
+          [newPasswordAttempts, newOtpAttempts, user.user_id]
+        );
+      } else {
+        await db.query(
+          `UPDATE users 
+           SET failed_login_attempts = ?, failed_otp_attempts = ? 
+           WHERE user_id = ?`,
+          [newPasswordAttempts, newOtpAttempts, user.user_id]
+        );
+      }
+
+      const passRemaining = Math.max(0, 5 - newPasswordAttempts);
+      const otpRemaining = Math.max(0, 5 - newOtpAttempts);
+
+      const otpMsg = isOtpExpired
+        ? 'OTP code has expired (5-minute limit). Please request a new code.'
+        : `Invalid OTP code. ${otpRemaining} attempt${otpRemaining !== 1 ? 's' : ''} remaining before OTP lockout.`;
+
+      const passMsg = isPasswordLocked
+        ? 'Account locked! 5 failed password attempts reached. Locked for 5 minutes.'
+        : `Incorrect password. ${passRemaining} attempt${passRemaining !== 1 ? 's' : ''} remaining before account lockout.`;
+
+      if (isPasswordLocked) {
+        return res.status(423).json({
+          success: false,
+          field: 'both',
+          locked: true,
+          otpLocked: isOtpLocked,
+          lockRemainingSeconds: 300,
+          passwordMessage: passMsg,
+          otpMessage: otpMsg,
+          message: 'Account locked due to 5 failed login attempts.'
+        });
+      }
+
+      if (isOtpLocked) {
+        return res.status(423).json({
+          success: false,
+          field: 'both',
+          locked: false,
+          otpLocked: true,
+          lockRemainingSeconds: 120,
+          passwordMessage: passMsg,
+          otpMessage: otpMsg,
+          message: 'OTP entry locked due to 5 failed OTP attempts. Locked for 2 minutes.'
+        });
+      }
+
+      return res.status(401).json({
+        success: false,
+        field: 'both',
+        passwordMessage: passMsg,
+        otpMessage: otpMsg,
+        passwordAttemptsRemaining: passRemaining,
+        otpAttemptsRemaining: otpRemaining,
+        message: 'Incorrect password and invalid OTP code. Please check both fields.'
+      });
+    }
+
+    // CASE B: ONLY Password is INVALID
     if (!isPasswordValid) {
       const newAttempts = (user.failed_login_attempts || 0) + 1;
 
       if (newAttempts >= 5) {
-        // 5 consecutive failed attempts: lock account for 5 minutes
         await db.query(
           `UPDATE users 
            SET failed_login_attempts = ?, lockout_until = DATE_ADD(NOW(), INTERVAL 5 MINUTE) 
@@ -325,54 +506,110 @@ app.post('/api/login', async (req, res) => {
           [newAttempts, user.user_id]
         );
 
-        console.warn(`🔒 [ACCOUNT LOCKED] Admin "${user.full_name}" (${user.email}) locked for 5 minutes after 5 failed attempts.`);
+        console.warn(`🔒 [ACCOUNT LOCKED] Admin "${user.full_name}" (${user.email}) locked for 5 minutes after 5 failed password attempts.`);
 
         return res.status(423).json({
           success: false,
           locked: true,
           lockRemainingSeconds: 300,
           field: 'password',
+          passwordMessage: 'Account locked! You have exceeded 5 failed login attempts. Access is locked for 5 minutes.',
           message: 'Account locked! You have exceeded 5 failed login attempts. Access is locked for 5 minutes.'
         });
       } else {
-        // Increment failed attempts and return remaining attempts
         await db.query(
           'UPDATE users SET failed_login_attempts = ? WHERE user_id = ?',
           [newAttempts, user.user_id]
         );
 
         const attemptsRemaining = 5 - newAttempts;
+        const msg = `Incorrect password. ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining before account lockout.`;
         return res.status(401).json({
           success: false,
           field: 'password',
           attemptsRemaining: attemptsRemaining,
-          message: `Incorrect password. ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining before account lockout.`
+          passwordMessage: msg,
+          message: msg
         });
       }
     }
 
-    // 6. Verify 4-digit OTP Code
-    if (!user.otp_code || user.otp_code.trim() !== otp.trim()) {
-      return res.status(401).json({ 
-        success: false, 
-        field: 'otp', 
-        message: 'Invalid OTP code.' 
-      });
+    // CASE C: ONLY OTP is INVALID
+    if (!isOtpValid) {
+      const newOtpAttempts = (user.failed_otp_attempts || 0) + 1;
+
+      if (newOtpAttempts >= 5) {
+        await db.query(
+          `UPDATE users 
+           SET failed_otp_attempts = ?, otp_lockout_until = DATE_ADD(NOW(), INTERVAL 2 MINUTE) 
+           WHERE user_id = ?`,
+          [newOtpAttempts, user.user_id]
+        );
+
+        console.warn(`🔒 [OTP LOCKED] Admin "${user.full_name}" (${user.email}) OTP entry locked for 2 minutes after 5 failed OTP attempts.`);
+
+        return res.status(423).json({
+          success: false,
+          otpLocked: true,
+          lockRemainingSeconds: 120,
+          field: 'otp',
+          otpMessage: 'OTP entry locked! You have exceeded 5 failed OTP attempts. OTP entry is locked for 2 minutes.',
+          message: 'OTP entry locked! You have exceeded 5 failed OTP attempts. OTP entry is locked for 2 minutes.'
+        });
+      } else {
+        await db.query(
+          'UPDATE users SET failed_otp_attempts = ? WHERE user_id = ?',
+          [newOtpAttempts, user.user_id]
+        );
+
+        const otpAttemptsRemaining = 5 - newOtpAttempts;
+        const msg = isOtpExpired
+          ? 'OTP code has expired (5-minute expiration limit). Please click "Send OTP" to request a new code.'
+          : `Invalid OTP code. ${otpAttemptsRemaining} attempt${otpAttemptsRemaining > 1 ? 's' : ''} remaining before OTP lockout.`;
+
+        return res.status(401).json({ 
+          success: false, 
+          field: 'otp', 
+          expired: isOtpExpired,
+          attemptsRemaining: otpAttemptsRemaining,
+          otpMessage: msg,
+          message: msg 
+        });
+      }
     }
 
-    // 7. Login successful! Reset failed attempts and clear lockout
+    // 7. Login successful! Reset failed attempts, clear lockouts, and clear OTP to prevent reuse
     await db.query(
       `UPDATE users 
-       SET last_login = NOW(), failed_login_attempts = 0, lockout_until = NULL 
+       SET last_login = NOW(), 
+           failed_login_attempts = 0, 
+           lockout_until = NULL,
+           failed_otp_attempts = 0,
+           otp_lockout_until = NULL,
+           otp_code = NULL,
+           otp_expires_at = NULL
        WHERE user_id = ?`,
       [user.user_id]
     );
 
     console.log(`🎉 [SUCCESSFUL LOGIN] Admin "${user.full_name}" (${user.email}) logged in successfully.`);
 
+    // Generate signed JWT token (valid for 8 hours)
+    const token = jwt.sign(
+      {
+        id: user.user_id,
+        name: user.full_name,
+        email: user.email,
+        role: user.role
+      },
+      JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+
     return res.json({
       success: true,
       message: 'Login successful! Redirecting to Dashboard...',
+      token: token,
       user: {
         id: user.user_id,
         name: user.full_name,
@@ -386,6 +623,50 @@ app.post('/api/login', async (req, res) => {
     return res.status(500).json({ 
       success: false, 
       message: 'A server error occurred: ' + error.message 
+    });
+  }
+});
+
+// ==========================================================
+// 5. VERIFY SESSION ENDPOINT (GET /api/verify-session)
+// ==========================================================
+app.get('/api/verify-session', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) {
+    return res.status(401).json({
+      valid: false,
+      message: 'Access denied. No authentication token provided.'
+    });
+  }
+
+  const parts = authHeader.split(' ');
+  const token = parts.length === 2 && parts[0] === 'Bearer' ? parts[1] : authHeader;
+
+  if (!token) {
+    return res.status(401).json({
+      valid: false,
+      message: 'Access denied. Malformed authorization token.'
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return res.json({
+      valid: true,
+      message: 'Session is active and valid.',
+      user: decoded
+    });
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        valid: false,
+        expired: true,
+        message: 'Session has expired. Please log in again.'
+      });
+    }
+    return res.status(401).json({
+      valid: false,
+      message: 'Invalid session token. Access denied.'
     });
   }
 });

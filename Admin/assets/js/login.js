@@ -4,13 +4,37 @@
  * Description: Client-side validation, OTP auto-advance, and backend authentication via MySQL.
  */
 
+// Dynamic API Base: Works when opened via file:/// or other local ports, falls back to http://localhost:3000
+const API_BASE = (window.location.protocol === 'file:' || !window.location.origin.includes(':3000'))
+  ? 'http://localhost:3000'
+  : '';
+
 // ==========================================================
 // 0. AUTHENTICATION ROUTE GUARD (REVERSE GUARD)
 // ==========================================================
 // Prevent already authenticated admins from viewing the login page
-function redirectIfAlreadyAuthenticated() {
-  if (sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
-    window.location.replace('dashboard.html');
+async function redirectIfAlreadyAuthenticated() {
+  const token = sessionStorage.getItem('tres_marias_token');
+  const isLoggedIn = sessionStorage.getItem('tres_marias_admin_logged_in');
+
+  if (isLoggedIn === 'true' && token) {
+    try {
+      const response = await fetch(`${API_BASE}/api/verify-session`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.valid) {
+        window.location.replace('dashboard.html');
+      } else {
+        // Token is invalid/expired - clear stale storage
+        sessionStorage.removeItem('tres_marias_token');
+        sessionStorage.removeItem('tres_marias_admin_logged_in');
+        sessionStorage.removeItem('tres_marias_admin_user');
+      }
+    } catch (e) {
+      // If server unreachable, maintain current location
+    }
   }
 }
 redirectIfAlreadyAuthenticated();
@@ -19,11 +43,6 @@ redirectIfAlreadyAuthenticated();
 window.addEventListener('pageshow', (event) => {
   redirectIfAlreadyAuthenticated();
 });
-
-// Dynamic API Base: Works when opened via file:/// or other local ports, falls back to http://localhost:3000
-const API_BASE = (window.location.protocol === 'file:' || !window.location.origin.includes(':3000'))
-  ? 'http://localhost:3000'
-  : '';
 
 const loginForm = document.getElementById('login-form');
 const usernameInput = document.getElementById('username-input');
@@ -63,8 +82,8 @@ function showAlert(message, type = 'error') {
 }
 
 function clearAlert() {
-  // Do not clear alert if account is actively locked
-  if (isAccountLocked()) return;
+  // Do not clear alert if account or OTP entry is actively locked
+  if (isAccountLocked() || isOtpLocked()) return;
 
   if (alertBox && alertText) {
     alertBox.className = 'login-alert';
@@ -88,7 +107,7 @@ function triggerShake() {
 }
 
 // ==========================================================
-// Account Lockout State & Countdown Timer
+// Account Lockout State & Countdown Timer (Password Brute-force: 5 mins)
 // ==========================================================
 let lockoutTimerInterval = null;
 const LOCKOUT_STORAGE_KEY = 'tres_marias_admin_lockout_until';
@@ -165,8 +184,101 @@ function stopLockoutCountdown() {
   }
 }
 
-// Check on page load if account is currently locked out in this browser
+// ==========================================================
+// OTP Lockout State & Countdown Timer (REQ-007: 2 mins after 5 failed OTPs)
+// ==========================================================
+let otpLockoutTimerInterval = null;
+const OTP_LOCKOUT_STORAGE_KEY = 'tres_marias_admin_otp_lockout_until';
+
+function isOtpLocked() {
+  const storedUntil = localStorage.getItem(OTP_LOCKOUT_STORAGE_KEY);
+  return storedUntil ? parseInt(storedUntil, 10) > Date.now() : false;
+}
+
+function setOtpFieldsLockedState(locked) {
+  otpBoxes.forEach(b => { 
+    if (b) {
+      b.disabled = locked;
+      if (locked) b.classList.add('has-error');
+      else b.classList.remove('has-error');
+    }
+  });
+  if (btnSendOtp) btnSendOtp.disabled = locked;
+  if (btnLogin) {
+    btnLogin.disabled = locked;
+    if (!locked && !isAccountLocked()) {
+      btnLogin.textContent = 'Log In';
+    }
+  }
+}
+
+function updateOtpLockoutUI() {
+  const storedUntil = localStorage.getItem(OTP_LOCKOUT_STORAGE_KEY);
+  if (!storedUntil) return;
+
+  const remainingMs = parseInt(storedUntil, 10) - Date.now();
+  if (remainingMs <= 0) {
+    stopOtpLockoutCountdown();
+    showAlert('OTP lockout period has expired. You may now request and enter a new OTP.', 'info');
+    return;
+  }
+
+  const totalSec = Math.ceil(remainingMs / 1000);
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+  showAlert(`OTP entry is locked due to 5 failed attempts. Please wait ${timeStr} before trying again.`, 'locked');
+  if (btnSendOtp) {
+    btnSendOtp.textContent = `Locked (${timeStr})`;
+  }
+  if (btnLogin) {
+    btnLogin.disabled = true;
+    btnLogin.textContent = `Locked (${timeStr})`;
+  }
+}
+
+function startOtpLockoutCountdown(seconds) {
+  if (otpLockoutTimerInterval) {
+    clearInterval(otpLockoutTimerInterval);
+  }
+
+  const expireTimestamp = Date.now() + (seconds * 1000);
+  localStorage.setItem(OTP_LOCKOUT_STORAGE_KEY, expireTimestamp.toString());
+  setOtpFieldsLockedState(true);
+  updateOtpLockoutUI();
+
+  otpLockoutTimerInterval = setInterval(() => {
+    const storedUntil = localStorage.getItem(OTP_LOCKOUT_STORAGE_KEY);
+    if (!storedUntil || parseInt(storedUntil, 10) <= Date.now()) {
+      stopOtpLockoutCountdown();
+      showAlert('OTP lockout period has expired. You may now request and enter a new OTP.', 'info');
+    } else {
+      updateOtpLockoutUI();
+    }
+  }, 1000);
+}
+
+function stopOtpLockoutCountdown() {
+  if (otpLockoutTimerInterval) {
+    clearInterval(otpLockoutTimerInterval);
+    otpLockoutTimerInterval = null;
+  }
+  localStorage.removeItem(OTP_LOCKOUT_STORAGE_KEY);
+  setOtpFieldsLockedState(false);
+  if (btnSendOtp) {
+    btnSendOtp.disabled = false;
+    btnSendOtp.textContent = 'Send OTP';
+  }
+  if (btnLogin && !isAccountLocked()) {
+    btnLogin.disabled = false;
+    btnLogin.textContent = 'Log In';
+  }
+}
+
+// Check on page load if account or OTP is currently locked out in this browser
 function checkLockoutOnPageLoad() {
+  // Check password account lockout
   const storedUntil = localStorage.getItem(LOCKOUT_STORAGE_KEY);
   if (storedUntil) {
     const remainingMs = parseInt(storedUntil, 10) - Date.now();
@@ -176,8 +288,31 @@ function checkLockoutOnPageLoad() {
       localStorage.removeItem(LOCKOUT_STORAGE_KEY);
     }
   }
+
+  // Check OTP lockout
+  const storedOtpUntil = localStorage.getItem(OTP_LOCKOUT_STORAGE_KEY);
+  if (storedOtpUntil) {
+    const remainingMs = parseInt(storedOtpUntil, 10) - Date.now();
+    if (remainingMs > 0) {
+      startOtpLockoutCountdown(Math.ceil(remainingMs / 1000));
+    } else {
+      localStorage.removeItem(OTP_LOCKOUT_STORAGE_KEY);
+    }
+  }
 }
 checkLockoutOnPageLoad();
+
+// Handle session timeout redirection from dashboard (REQ-008: 15-minute inactivity)
+function checkSessionTimeoutNotice() {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('reason') === 'inactivity') {
+    showAlert('Your session has timed out due to 15 minutes of inactivity. Please log in again.', 'info');
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }
+}
+checkSessionTimeoutNotice();
 
 // Auto-advance through OTP input boxes
 otpBoxes.forEach((box, index) => {
@@ -289,6 +424,9 @@ if (btnSendOtp) {
       } else if (result.locked) {
         startLockoutCountdown(result.lockRemainingSeconds || 300);
         triggerShake();
+      } else if (result.otpLocked) {
+        startOtpLockoutCountdown(result.lockRemainingSeconds || 120);
+        triggerShake();
       } else {
         showAlert(result.message || 'Unable to send OTP.', 'error');
         if (result.field === 'username' && usernameInput && usernameError) {
@@ -301,7 +439,7 @@ if (btnSendOtp) {
       console.error('Fetch error:', err);
       showAlert('Unable to connect to server.', 'error');
     } finally {
-      if (!isAccountLocked()) {
+      if (!isAccountLocked() && !isOtpLocked()) {
         btnSendOtp.disabled = false;
         btnSendOtp.textContent = 'Send OTP';
       }
@@ -316,8 +454,15 @@ if (loginForm) {
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    // Prevent submission if account is currently locked out
+    // Prevent submission if account or OTP is currently locked out
     if (isAccountLocked()) {
+      showAlert('Account is temporarily locked. Please wait for the timer to expire.', 'locked');
+      triggerShake();
+      return;
+    }
+
+    if (isOtpLocked()) {
+      showAlert('OTP entry is locked due to 5 failed attempts. Please wait for the timer to expire.', 'locked');
       triggerShake();
       return;
     }
@@ -388,62 +533,103 @@ if (loginForm) {
       if (result.success) {
         // Login successful!
         stopLockoutCountdown();
+        stopOtpLockoutCountdown();
         showAlert(result.message, 'success');
         if (btnLogin) {
           btnLogin.textContent = 'Redirecting...';
           btnLogin.style.opacity = '0.8';
         }
 
-        // Save Admin session in browser
+        // Save Admin session and JWT token in browser
+        if (result.token) {
+          sessionStorage.setItem('tres_marias_token', result.token);
+        }
         sessionStorage.setItem('tres_marias_admin_logged_in', 'true');
         sessionStorage.setItem('tres_marias_admin_user', JSON.stringify(result.user));
 
         setTimeout(() => {
           window.location.replace('dashboard.html');
         }, 600);
-      } else if (result.locked) {
-        // Account locked due to 5 consecutive failed attempts
+        return;
+      }
+
+      // Handle Lockout states if returned
+      if (result.locked) {
         startLockoutCountdown(result.lockRemainingSeconds || 300);
-        triggerShake();
-        if (passwordInput && passwordError) {
-          passwordInput.classList.add('has-error');
-          passwordError.textContent = result.message;
-          passwordError.classList.add('visible');
-        }
+      } else if (result.otpLocked) {
+        startOtpLockoutCountdown(result.lockRemainingSeconds || 120);
       } else {
-        // Invalid input according to MySQL check
         if (btnLogin) {
           btnLogin.disabled = false;
           btnLogin.textContent = 'Log In';
         }
-        showAlert(result.message, 'error');
-        triggerShake();
+      }
 
-        if (result.field === 'username' && usernameInput && usernameError) {
+      showAlert(result.message, (result.locked || result.otpLocked) ? 'locked' : 'error');
+      triggerShake();
+
+      // Highlight invalid fields
+      if (result.field === 'both') {
+        // Highlight BOTH password and OTP fields simultaneously
+        if (passwordInput) {
+          passwordInput.classList.add('has-error');
+        }
+        if (passwordError) {
+          passwordError.textContent = result.passwordMessage || 'Incorrect password.';
+          passwordError.classList.add('visible');
+        }
+
+        otpBoxes.forEach(b => { if (b) b.classList.add('has-error'); });
+        if (otpError) {
+          otpError.textContent = result.otpMessage || 'Invalid OTP code.';
+          otpError.classList.add('visible');
+        }
+        if (passwordInput) passwordInput.focus();
+
+      } else if (result.field === 'username') {
+        if (usernameInput) {
           usernameInput.classList.add('has-error');
+          usernameInput.focus();
+        }
+        if (usernameError) {
           usernameError.textContent = result.message;
           usernameError.classList.add('visible');
-          usernameInput.focus();
-        } else if (result.field === 'password' && passwordInput && passwordError) {
-          passwordInput.classList.add('has-error');
-          passwordError.textContent = result.message;
-          passwordError.classList.add('visible');
-          passwordInput.focus();
-        } else if (result.field === 'otp' && otpError) {
-          otpBoxes.forEach(b => { if (b) b.classList.add('has-error'); });
-          otpError.textContent = result.message;
-          otpError.classList.add('visible');
-          if (otpBoxes[0]) otpBoxes[0].focus();
         }
+
+      } else if (result.field === 'password') {
+        if (passwordInput) {
+          passwordInput.classList.add('has-error');
+          passwordInput.focus();
+        }
+        if (passwordError) {
+          passwordError.textContent = result.passwordMessage || result.message;
+          passwordError.classList.add('visible');
+        }
+
+      } else if (result.field === 'otp') {
+        otpBoxes.forEach(b => { if (b) b.classList.add('has-error'); });
+        if (otpError) {
+          otpError.textContent = result.otpMessage || result.message;
+          otpError.classList.add('visible');
+        }
+        if (otpBoxes[0] && !isOtpLocked()) otpBoxes[0].focus();
       }
+
     } catch (err) {
       console.error('Fetch error:', err);
-      if (btnLogin) {
+      if (btnLogin && !isAccountLocked() && !isOtpLocked()) {
         btnLogin.disabled = false;
         btnLogin.textContent = 'Log In';
       }
       showAlert('Unable to connect to MySQL Backend Server on port 3000. Please ensure the server is running.', 'error');
       triggerShake();
+    } finally {
+      if (!isAccountLocked() && !isOtpLocked()) {
+        if (btnLogin && btnLogin.textContent === 'Verifying with Database...') {
+          btnLogin.disabled = false;
+          btnLogin.textContent = 'Log In';
+        }
+      }
     }
   });
 }

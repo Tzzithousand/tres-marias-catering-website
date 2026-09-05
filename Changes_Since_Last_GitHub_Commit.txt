@@ -1,0 +1,139 @@
+================================================================================
+TRES MARIAS ADMIN - SUMMARY OF CHANGES SINCE LAST GITHUB COMMIT
+Last Commit: 37c0b2fc4bc5d1e26600bdde4018088e8ae74775
+Date Generated: September 6, 2026
+================================================================================
+
+1. SIDEBAR NAVIGATION & CATEGORY LABEL
+--------------------------------------------------------------------------------
+File: Admin/pages/dashboard.html
+- Renamed sidebar category item #3 from "Logistics" to "Equipment / INV."
+- Updated corresponding anchor link target from #logistics to #equipment-inv.
+- Removed the duplicate "Log Out" link from the bottom of the sidebar to keep
+  the interface streamlined and centralized under the top-right profile menu.
+
+
+2. LOGOUT CONFIRMATION MODAL (GLASSMORPHIC DIALOG)
+--------------------------------------------------------------------------------
+Files:
+- Admin/pages/dashboard.html
+- Admin/assets/css/dashboard.css
+- Admin/assets/js/dashboard.js
+
+- Replaced standard browser window.confirm() popup with a modern modal dialog (#logout-modal).
+- Styled with dark backdrop blur, glowing icon, modal title, description, and
+  cancel / confirm buttons.
+- Supports closing via Escape key, backdrop outside click, or the Cancel button.
+- On confirmation, clears all session tokens and credentials from sessionStorage,
+  then safely redirects to login.html.
+
+
+3. JWT AUTHENTICATION & SESSION GUARDS
+--------------------------------------------------------------------------------
+Files:
+- Admin/server.js
+- Admin/package.json
+- Admin/package-lock.json
+- Admin/assets/js/dashboard.js
+- Admin/pages/logo.html
+- Admin/pages/login.html
+
+- Installed dependencies: "jsonwebtoken" and "dotenv".
+- Loaded JWT secret key securely from .env (JWT_SECRET).
+- Implemented GET /api/verify-session endpoint in Express to cryptographically
+  verify Bearer JWT tokens.
+- On successful login, the server generates and returns a signed 8-hour JWT token
+  containing user ID, full name, email, and role.
+- Added route guards in dashboard.js, login.html, and logo.html checking token validity.
+
+
+4. REQ-004: ADMIN 2FA OTP (5-MINUTE EXPIRATION)
+--------------------------------------------------------------------------------
+Files:
+- Admin/server.js
+- Admin/assets/js/login.js
+
+- Updated /api/send-otp: Saves generated OTP with DATE_ADD(NOW(), INTERVAL 5 MINUTE).
+- Updated /api/login: Verifies whether otp_expires_at has expired (Date.now() > otpExpiry).
+  If expired, returns 401: "OTP code has expired (5-minute expiration limit). Please click 'Send OTP' to request a new code."
+- On successful login, otp_code and otp_expires_at are set to NULL in MySQL to
+  prevent code reuse.
+
+
+5. REQ-007: BRUTE-FORCE PROTECTION (PASSWORD & OTP LOCKOUT)
+--------------------------------------------------------------------------------
+Files:
+- Admin/database/schema.sql
+- Admin/server.js
+- Admin/assets/js/login.js
+
+- Database Schema: Added columns failed_otp_attempts (INT) and otp_lockout_until (DATETIME)
+  to the users table in schema.sql and MySQL.
+- Password Lockout: Maintained 5-minute lockout (INTERVAL 5 MINUTE) after 5 failed
+  password attempts (as explicitly requested).
+- OTP Lockout: Implemented 2-minute lockout (INTERVAL 2 MINUTE) after 5 failed
+  OTP attempts.
+- Updated /api/check-lockout and /api/send-otp: Checks both password lockout
+  and OTP lockout states, returning remaining lockout time formatted in English.
+- Frontend (login.js): Implemented startOtpLockoutCountdown() which disables OTP boxes
+  and Send OTP button during the 2-minute lockout, rendering a live countdown timer.
+
+
+6. SIMULTANEOUS PASSWORD & OTP VALIDATION ("BOTH INVALID" FEEDBACK)
+--------------------------------------------------------------------------------
+Files:
+- Admin/server.js
+- Admin/assets/js/login.js
+
+- Previously, server.js exited immediately on password error without checking the OTP.
+- Updated server.js: Now validates password and OTP concurrently.
+- When BOTH password and OTP are incorrect:
+  * Server increments both failed attempt counters.
+  * Returns field: 'both' with individual error messages for password and OTP.
+- Updated login.js:
+  * Highlights both the password input and all 4 OTP boxes in red (.has-error).
+  * Displays error messages under both fields simultaneously.
+  * Displays top banner: "Incorrect password and invalid OTP code. Please check both fields."
+  * Triggers card shake animation for clear visual feedback.
+
+
+7. FIX FOR LOGIN BUTTON STUCK ON "VERIFYING WITH DATABASE..."
+--------------------------------------------------------------------------------
+File: Admin/assets/js/login.js
+- Fixed a bug where btnLogin remained disabled with the text "Verifying with Database..."
+  whenever a lockout (HTTP 423) or error occurred.
+- Added a robust finally block and state resets ensuring that btnLogin is
+  guaranteed to reset back to "Log In" and re-enabled as soon as verification
+  completes, or displays the live countdown if locked.
+
+
+8. REQ-008: SESSION TIMEOUT (15-MINUTE INACTIVITY WATCHDOG & WINDOW CLOSE)
+--------------------------------------------------------------------------------
+Files:
+- Admin/assets/js/dashboard.js
+- Admin/assets/js/login.js
+
+- Immediate Tab/Window Close: Session credentials stored in sessionStorage (cleared
+  automatically when the tab or window is closed).
+- 15-Minute Inactivity Watchdog:
+  * Monitors user activity events (mousemove, mousedown, keydown, touchstart, scroll, click).
+  * Stores throttled timestamp of last user activity in sessionStorage.
+  * Checks elapsed inactivity time every 5 seconds, on window focus, and on tab visibility change.
+  * If 15 minutes of inactivity elapse, automatically purges the JWT session
+    and redirects the administrator to login.html?reason=inactivity.
+- Inactivity Notice Banner:
+  * login.js checks for reason=inactivity query parameter and displays:
+    "Your session has timed out due to 15 minutes of inactivity. Please log in again."
+
+================================================================================
+MODIFIED FILES SUMMARY (git status):
+- Admin/pages/dashboard.html
+- Admin/pages/logo.html
+- Admin/assets/css/dashboard.css
+- Admin/assets/js/dashboard.js
+- Admin/assets/js/login.js
+- Admin/server.js
+- Admin/database/schema.sql
+- Admin/package.json
+- Admin/package-lock.json
+================================================================================

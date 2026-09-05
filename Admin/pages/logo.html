@@ -6,8 +6,8 @@
   <title>Tres Marias Catering Services - Logo</title>
   <link rel="stylesheet" href="../assets/css/style.css">
   <script>
-    // If admin is already logged in, redirect directly to dashboard
-    if (sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
+    // If admin is already logged in with a valid token, redirect directly to dashboard
+    if (sessionStorage.getItem('tres_marias_token') && sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
       window.location.replace('dashboard.html');
     }
   </script>

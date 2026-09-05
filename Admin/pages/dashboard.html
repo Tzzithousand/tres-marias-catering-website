@@ -184,9 +184,9 @@
             </a>
           </li>
 
-          <!-- 3. Logistics -->
+          <!-- 3. Equipment / INV. -->
           <li>
-            <a href="#logistics" class="nav-item" title="Logistics">
+            <a href="#equipment-inv" class="nav-item" title="Equipment / INV.">
               <span class="nav-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="1" y="3" width="15" height="13"></rect>
@@ -195,7 +195,7 @@
                   <circle cx="18.5" cy="18.5" r="2.5"></circle>
                 </svg>
               </span>
-              <span class="nav-text">Logistics</span>
+              <span class="nav-text">Equipment / INV.</span>
             </a>
           </li>
 
@@ -278,17 +278,6 @@
           </span>
           <span class="nav-text">Help</span>
         </a>
-
-        <a href="#logout" class="nav-item nav-item-logout" id="btn-sidebar-logout" title="Log Out">
-          <span class="nav-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16 17 21 12 16 7"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
-            </svg>
-          </span>
-          <span class="nav-text">Log Out</span>
-        </a>
       </div>
 
     </aside>
@@ -298,6 +287,27 @@
       <!-- Main content area cleared of all content boxes, cards, and widgets -->
     </main>
 
+  </div>
+
+  <!-- ==================== LOGOUT CONFIRMATION MODAL ==================== -->
+  <div class="modal-overlay" id="logout-modal" role="dialog" aria-modal="true" aria-labelledby="logout-modal-title" aria-describedby="logout-modal-desc" tabindex="-1">
+    <div class="modal-card">
+      <div class="modal-icon-wrapper">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+      </div>
+      <h3 class="modal-title" id="logout-modal-title">Confirm Log Out</h3>
+      <p class="modal-desc" id="logout-modal-desc">
+        Are you sure you want to log out?
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="btn-modal-cancel" id="btn-cancel-logout">Cancel</button>
+        <button type="button" class="btn-modal-confirm" id="btn-confirm-logout">Log Out</button>
+      </div>
+    </div>
   </div>
 
   <!-- Dashboard JavaScript -->
