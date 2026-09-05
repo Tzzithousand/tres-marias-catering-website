@@ -7,28 +7,27 @@ Clean, organized frontend architecture paired with an Express.js and MySQL backe
 ## Folder and File Structure
 
 ```text
-Capstone Website/
-└── Admin/
-    ├── assets/
-    │   ├── css/
-    │   │   ├── dashboard.css           # Dashboard layout, topbar, and sidebar styles
-    │   │   └── style.css               # Combined stylesheet for logo and login
-    │   ├── images/
-    │   │   └── logo.jpg                # Official Tres Marias brand logo
-    │   └── js/
-    │       ├── dashboard.js            # Sidebar toggle and search interactions
-    │       └── login.js                # Frontend authentication, OTP auto-advance, and API calls
-    ├── database/
-    │   ├── db.js                       # MySQL database connection pool (mysql2/promise)
-    │   └── schema.sql                  # Database schema (users table, seed admin credentials)
-    ├── pages/
-    │   ├── dashboard.html              # Admin Dashboard (Sidebar, Top Logo, Search Bar)
-    │   ├── login.html                  # Admin Login Screen with OTP verification
-    │   └── logo.html                   # Logo Splash Screen (links to login.html)
-    ├── index.html                      # Entry point (auto-redirect to pages/logo.html)
-    ├── package.json                    # Node dependencies and scripts
-    ├── package-lock.json               # Locked dependency tree
-    └── server.js                       # Express.js REST API server & static file host
+Admin/
+├── assets/
+│   ├── css/
+│   │   ├── dashboard.css           # Dashboard layout, topbar, and sidebar styles
+│   │   └── style.css               # Combined stylesheet for logo and login
+│   ├── images/
+│   │   └── logo.jpg                # Official Tres Marias brand logo
+│   └── js/
+│       ├── dashboard.js            # Sidebar toggle and search interactions
+│       └── login.js                # Frontend authentication, OTP auto-advance, and API calls
+├── database/
+│   ├── db.js                       # MySQL database connection pool (mysql2/promise)
+│   └── schema.sql                  # Database schema (users table, seed admin credentials)
+├── pages/
+│   ├── dashboard.html              # Admin Dashboard (Sidebar, Top Logo, Search Bar)
+│   ├── login.html                  # Admin Login Screen with OTP verification
+│   └── logo.html                   # Logo Splash Screen (links to login.html)
+├── index.html                      # Entry point (auto-redirect to pages/logo.html)
+├── package.json                    # Node dependencies and scripts
+├── package-lock.json               # Locked dependency tree
+└── server.js                       # Express.js REST API server & static file host
 ```
 
 ---
@@ -38,9 +37,9 @@ Capstone Website/
 ### 1. Database Setup (MySQL)
 
 1. Ensure your MySQL server is running on `localhost:3306`.
-2. Import `Capstone Website/Admin/database/schema.sql` into your MySQL instance:
+2. Import `Admin/database/schema.sql` into your MySQL instance:
    ```bash
-   mysql -u root -p < "Capstone Website/Admin/database/schema.sql"
+   mysql -u root -p < "Admin/database/schema.sql"
    ```
 3. The seed credentials for the admin account:
    - **Email / Username**: `admin@email.com`
@@ -51,7 +50,7 @@ Capstone Website/
 
 1. Navigate to the Admin directory and install dependencies:
    ```bash
-   cd "Capstone Website/Admin"
+   cd "Admin"
    npm install
    ```
 2. Start the server:
