@@ -1,0 +1,351 @@
+================================================================================
+TRES MARIAS CATERING SERVICES - COMPLETE PROJECT SETUP & REQUIREMENTS GUIDE
+================================================================================
+Repository: https://github.com/Tzzithousand/tres-marias-catering-website.git
+Project Type: Full-Stack Web Application (Vanilla JS Frontend + Node.js/Express Backend + MySQL DB)
+Target Audience: Team Members Setting Up the Project from Scratch
+Language: English
+================================================================================
+
+
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+1. Software Prerequisites (What to download and install first)
+2. Recommended Visual Studio Code Extensions (Names & IDs)
+3. Project Architecture & Tech Stack
+4. Node.js Packages & Backend Dependencies
+5. Environment Configuration (.env setup)
+6. Database Setup & SQL Import Instructions
+7. Default Seed Credentials & Testing Accounts
+8. API Endpoints Reference
+9. Complete Step-by-Step Setup Guide (From Zero to Running)
+10. Common Errors & Troubleshooting Guide
+
+
+================================================================================
+1. SOFTWARE PREREQUISITES
+================================================================================
+Before running this project, your computer must have the following software installed:
+
+1. Visual Studio Code (VS Code)
+   - The primary code editor for this project.
+   - Download: https://code.visualstudio.com/
+
+2. Node.js (LTS Version - v18.x or v20.x Recommended)
+   - Provides the JavaScript runtime environment for the Express backend and the npm package manager.
+   - Download: https://nodejs.org/ (Select "LTS" version)
+   - Verify installation in terminal:
+       node -v
+       npm -v
+
+3. Git for Windows
+   - For cloning the repository, pulling updates, and pushing branches.
+   - Download: https://git-scm.com/download/win
+   - Verify installation in terminal:
+       git --version
+
+4. MySQL Server 8.0 or XAMPP
+   - The relational database management system used to store user accounts, passwords, and OTPs.
+   - Choose ONE of the following options:
+       Option A (Recommended for standard setup): MySQL Community Server 8.0 & MySQL Workbench
+         Download: https://dev.mysql.com/downloads/installer/
+       Option B (Easiest all-in-one setup): XAMPP (Apache + MySQL/MariaDB + phpMyAdmin)
+         Download: https://www.apachefriends.org/
+   - Default Port: 3306
+   - Default User: root
+
+5. Modern Web Browser
+   - Google Chrome, Microsoft Edge, Brave, or Mozilla Firefox.
+
+
+================================================================================
+2. RECOMMENDED VISUAL STUDIO CODE EXTENSIONS
+================================================================================
+Open VS Code, press Ctrl+Shift+X (or click the Extensions icon on the left sidebar), 
+search for each of these extensions, and click "Install":
+
+1. Live Server
+   - Extension ID: ritwickdey.LiveServer
+   - Publisher: Ritwick Dey
+   - Purpose: Quickly opens static HTML pages with hot-reloading for frontend testing.
+
+2. MySQL or Database Client
+   - Extension ID: cweijan.vscode-mysql-client2
+   - Publisher: cweijan
+   - Alternative: SQLTools (mtxr.sqltools) + SQLTools MySQL/MariaDB Driver (mtxr.sqltools-driver-mysql)
+   - Purpose: Connect directly to your local MySQL database inside VS Code to view tables, run queries, and inspect records.
+
+3. DotENV
+   - Extension ID: mikestead.dotenv
+   - Publisher: mikestead
+   - Purpose: Syntax highlighting and auto-completion for `.env` environment configuration files.
+
+4. Prettier - Code Formatter
+   - Extension ID: esbenp.prettier-vscode
+   - Publisher: Prettier
+   - Purpose: Ensures clean, uniform code formatting across all HTML, CSS, JS, and JSON files.
+
+5. ESLint
+   - Extension ID: dbaeumer.vscode-eslint
+   - Publisher: Microsoft
+   - Purpose: Real-time JavaScript syntax error checking, code quality checks, and best practices.
+
+6. Thunder Client (or Postman)
+   - Extension ID: rangav.vscode-thunder-client
+   - Publisher: Ranga Vadhineni
+   - Purpose: Lightweight REST API client inside VS Code for testing backend API endpoints (/api/login, /api/verify-session, /api/send-otp) without opening external software.
+
+7. Path Intellisense
+   - Extension ID: christian-kohler.path-intellisense
+   - Publisher: Christian Kohler
+   - Purpose: Auto-completes file paths when importing scripts, stylesheets, and images.
+
+
+================================================================================
+3. PROJECT ARCHITECTURE & TECH STACK
+================================================================================
+The project directory structure is organized as follows:
+
+Castone Website/
+│
+├── Admin/
+│   ├── assets/
+│   │   ├── css/
+│   │   │   ├── dashboard.css          # Admin dashboard, sidebar, and layout styling
+│   │   │   └── style.css              # Splash page and login card styling
+│   │   ├── images/
+│   │   │   └── logo.jpg               # Official Tres Marias brand logo
+│   │   └── js/
+│   │       ├── dashboard.js           # Dashboard interactions, search, and logout modal
+│   │       └── login.js               # Login form validation, OTP inputs, and API calls
+│   │
+│   ├── database/
+│   │   ├── db.js                      # MySQL connection pool (using mysql2/promise)
+│   │   └── schema.sql                 # SQL schema: creates database, users table, and seed admin
+│   │
+│   ├── pages/
+│   │   ├── dashboard.html             # Main admin dashboard with sidebar and search bar
+│   │   ├── login.html                 # Admin login page with 2FA OTP verification
+│   │   └── logo.html                  # Splash screen showcasing company logo
+│   │
+│   ├── .env                           # Local environment variables (Port, DB credentials, JWT secret)
+│   ├── .gitignore                     # Git ignore rules (ignores node_modules, logs, etc.)
+│   ├── index.html                     # Entry point (auto-redirects to pages/logo.html or dashboard)
+│   ├── package.json                   # Node.js dependencies and run scripts
+│   ├── package-lock.json              # Exact package version lockfile
+│   └── server.js                      # Express.js REST API server & static file host
+│
+├── Changes_Since_Last_GitHub_Commit.txt # Detailed documentation of recent feature updates
+├── PROJECT_SETUP_REQUIREMENTS.txt     # This setup checklist file
+└── README.md                          # Repository overview and documentation
+
+
+================================================================================
+4. NODE.JS PACKAGES & BACKEND DEPENDENCIES
+================================================================================
+The backend server runs on Express.js and requires the packages defined in 
+`Admin/package.json`. These are automatically installed when running `npm install` inside the `Admin` directory:
+
+1. express (^5.2.1)
+   - The web framework that serves API endpoints and static frontend assets.
+2. mysql2 (^3.24.3)
+   - High-performance MySQL client supporting Promises, async/await, and connection pooling.
+3. bcryptjs (^3.0.3)
+   - Secure password hashing and verification to ensure credentials are never stored in plaintext.
+4. jsonwebtoken (^9.0.3)
+   - Generates and cryptographically verifies signed 8-hour JWT Bearer tokens for session protection.
+5. dotenv (^17.4.2)
+   - Loads sensitive configuration (database credentials, port, secret keys) from the `.env` file into process.env.
+6. cors (^2.8.6)
+   - Enables Cross-Origin Resource Sharing for secure browser requests.
+
+
+================================================================================
+5. ENVIRONMENT CONFIGURATION (.env SETUP)
+================================================================================
+Check if an `.env` file exists inside the `Admin/` directory. If it does not exist, 
+create a new file named `.env` inside `Admin/` with the following contents:
+
+-----------------------[ Admin/.env ]-----------------------
+# Server Configuration
+PORT=3000
+
+# Database Configuration (MySQL 8.0 / XAMPP)
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD="YourMySQLPasswordHere"
+DB_NAME=tres_marias_user_db
+DB_PORT=3306
+
+# JSON Web Token Secret Key (256-bit cryptographically secure key)
+JWT_SECRET="tres_marias_c4t3r1ng_s3cur3_jwt_t0k3n_k3y_9824_vps_2026"
+------------------------------------------------------------
+
+IMPORTANT NOTES FOR TEAM MEMBERS:
+- If using standard MySQL Workbench / Server:
+  Replace "YourMySQLPasswordHere" with the root password you created when installing MySQL (e.g., "Admin_123#" or "root").
+- If using XAMPP:
+  By default, XAMPP's root user has NO password. In that case, set:
+  DB_PASSWORD=""
+
+
+================================================================================
+6. DATABASE SETUP & SQL IMPORT INSTRUCTIONS
+================================================================================
+Database Name: tres_marias_user_db
+Schema Script: Admin/database/schema.sql
+
+Follow ANY ONE of these methods to create the database:
+
+METHOD A: Using MySQL Workbench
+1. Open MySQL Workbench and connect to your local MySQL instance.
+2. Go to File -> Open SQL Script...
+3. Browse and select: "Admin/database/schema.sql"
+4. Click the Lightning Bolt icon (Execute) to run the script.
+5. In the SCHEMAS panel on the left, right-click and click "Refresh All". You will see `tres_marias_user_db`.
+
+METHOD B: Using XAMPP phpMyAdmin
+1. Open XAMPP Control Panel and start "Apache" and "MySQL".
+2. Open your browser and navigate to: http://localhost/phpmyadmin/
+3. Click on the "Import" tab at the top.
+4. Click "Choose File" and select: "Admin/database/schema.sql"
+5. Scroll to the bottom and click "Import".
+
+METHOD C: Using Command Line / PowerShell
+1. Open terminal and run:
+     mysql -u root -p < "Admin/database/schema.sql"
+2. Enter your MySQL root password when prompted.
+
+
+================================================================================
+7. DEFAULT SEED CREDENTIALS & TESTING ACCOUNTS
+================================================================================
+Once the schema is imported, a default administrator account is already created:
+
+- Role: System Administrator
+- Email / Username: admin@email.com
+- Password: Password123
+- Seed 4-Digit OTP: 1234
+- Account Status: Active
+
+OTP & Security Rules:
+- The OTP is 4 digits.
+- The default seed OTP is 1234.
+- If you request a new OTP through the login screen, a fresh 4-digit code is generated with a 5-minute validity window.
+- The system includes account lockout protection after consecutive failed attempts to prevent brute-force attacks.
+
+
+================================================================================
+8. API ENDPOINTS REFERENCE
+================================================================================
+All endpoints are served from http://localhost:3000
+
+1. POST /api/login
+   - Request Body: { "email": "admin@email.com", "password": "Password123", "otp": "1234" }
+   - Description: Validates admin credentials and OTP. Returns signed JWT token on success.
+
+2. GET /api/verify-session
+   - Request Header: Authorization: Bearer <jwt_token>
+   - Description: Validates token authenticity and expiration for frontend route protection.
+
+3. POST /api/send-otp
+   - Request Body: { "email": "admin@email.com", "password": "Password123" }
+   - Description: Verifies credentials and generates/sends a fresh 4-digit OTP with a 5-minute expiry.
+
+4. GET /api/check-lockout?email=admin@email.com
+   - Description: Checks if an account is currently locked out due to failed attempts and returns remaining cooldown seconds.
+
+5. GET /api/health
+   - Description: Server health check endpoint confirming API status and uptime.
+
+
+================================================================================
+9. COMPLETE STEP-BY-STEP SETUP GUIDE (FROM ZERO TO RUNNING)
+================================================================================
+Send these exact steps to any group member who has never set up the project before:
+
+STEP 1: Install Prerequisites
+- Install VS Code, Git for Windows, Node.js (LTS), and MySQL (or XAMPP).
+
+STEP 2: Clone the GitHub Repository
+- Open Command Prompt or PowerShell, navigate to your desired folder, and run:
+    git clone https://github.com/Tzzithousand/tres-marias-catering-website.git
+- Then enter the project directory:
+    cd tres-marias-catering-website
+
+STEP 3: Open in VS Code
+- In terminal, type:
+    code .
+- Install the recommended extensions (Live Server, DotENV, MySQL / Database Client, Prettier).
+
+STEP 4: Start MySQL and Import Schema
+- Ensure MySQL service is running (or click Start on MySQL in XAMPP).
+- Import `Admin/database/schema.sql` using MySQL Workbench or phpMyAdmin (see Section 6).
+
+STEP 5: Configure the .env File
+- Look inside the `Admin/` folder.
+- Ensure `Admin/.env` exists and that `DB_PASSWORD` matches your local MySQL password.
+
+STEP 6: Install Backend Dependencies
+- In VS Code, open the integrated terminal (Ctrl + ` or Terminal -> New Terminal).
+- Run:
+    cd Admin
+    npm install
+
+STEP 7: Start the Server
+- In the same `Admin` terminal, run:
+    npm start
+- You should see the following confirmation messages:
+    Tres Marias Admin Server running at: http://localhost:3000
+    Login Page URL: http://localhost:3000/pages/login.html
+    Successfully connected to tres_marias_user_db
+
+STEP 8: Test in Browser
+- Open your browser and go to:
+    http://localhost:3000
+- The application will automatically redirect you to the splash screen (`pages/logo.html`).
+- Click the circular logo to proceed to `pages/login.html`.
+- Enter:
+    Email: admin@email.com
+    Password: Password123
+    OTP: 1234
+- Click "Login". You will be successfully authenticated and taken to the Admin Dashboard (`pages/dashboard.html`).
+
+
+================================================================================
+10. COMMON ERRORS & TROUBLESHOOTING GUIDE
+================================================================================
+
+ISSUE 1: "Error in connecting to MySQL: Access denied for user 'root'@'localhost'"
+- Cause: The password in `Admin/.env` does not match your MySQL server root password.
+- Solution: Open `Admin/.env`, edit `DB_PASSWORD` with your actual password, save the file, and restart the server (`Ctrl+C` then `npm start`).
+
+ISSUE 2: "Error: connect ECONNREFUSED 127.0.0.1:3306"
+- Cause: MySQL server is not running.
+- Solution: 
+  - If using MySQL Installer: Press Win+R, type `services.msc`, locate "MySQL80", right-click and select "Start".
+  - If using XAMPP: Open XAMPP Control Panel and click the "Start" button next to MySQL.
+
+ISSUE 3: "Error: Unknown database 'tres_marias_user_db'"
+- Cause: You have not imported the database schema yet.
+- Solution: Run `Admin/database/schema.sql` in MySQL Workbench or phpMyAdmin (see Section 6).
+
+ISSUE 4: "Error: listen EADDRINUSE: address already in use :::3000"
+- Cause: Another process or background terminal is already using port 3000.
+- Solution:
+  - Option A: Kill the existing Node process in Task Manager.
+  - Option B: Change `PORT=3001` in `Admin/.env` and re-run `npm start`.
+
+ISSUE 5: "Cannot find module 'express'" or other missing module errors
+- Cause: Dependencies have not been installed yet.
+- Solution: Navigate to `Admin` folder and run `npm install`:
+    cd Admin
+    npm install
+
+ISSUE 6: Getting redirected to login.html when accessing dashboard.html directly
+- Cause: The security route guard is active. Without logging in and acquiring a valid JWT session token, direct access to the dashboard is denied.
+- Solution: Always log in through `pages/login.html` with valid credentials and OTP.
+
+================================================================================
+END OF SETUP GUIDE
+================================================================================
