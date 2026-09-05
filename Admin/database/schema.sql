@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS `users` (
   
   -- Account Status and Logs
   `status` ENUM('active', 'inactive', 'suspended') NOT NULL DEFAULT 'active',
+  `failed_login_attempts` INT NOT NULL DEFAULT 0,
+  `lockout_until` DATETIME NULL,
   `last_login` DATETIME NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

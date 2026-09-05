@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tres Marias Catering Services - Logo</title>
   <link rel="stylesheet" href="../assets/css/style.css">
+  <script>
+    // If admin is already logged in, redirect directly to dashboard
+    if (sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
+      window.location.replace('dashboard.html');
+    }
+  </script>
 </head>
 <body>
 

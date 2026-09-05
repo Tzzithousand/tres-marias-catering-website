@@ -6,10 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tres Marias Admin - Redirecting...</title>
   <script>
-    window.location.replace("pages/logo.html");
+    if (sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
+      window.location.replace("pages/dashboard.html");
+    } else {
+      window.location.replace("pages/logo.html");
+    }
   </script>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background-color: #0b0f19; color: #94a3b8;">
   <p>Redirecting to <a href="pages/logo.html" style="color: #c5a059; font-weight: 600; text-decoration: none;">Tres Marias Admin</a>...</p>
 </body>
 </html>
+  

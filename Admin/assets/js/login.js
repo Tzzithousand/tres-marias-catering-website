@@ -4,6 +4,22 @@
  * Description: Client-side validation, OTP auto-advance, and backend authentication via MySQL.
  */
 
+// ==========================================================
+// 0. AUTHENTICATION ROUTE GUARD (REVERSE GUARD)
+// ==========================================================
+// Prevent already authenticated admins from viewing the login page
+function redirectIfAlreadyAuthenticated() {
+  if (sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
+    window.location.replace('dashboard.html');
+  }
+}
+redirectIfAlreadyAuthenticated();
+
+// Handle browser Back-Forward Cache (BFCache) when navigating via Back button
+window.addEventListener('pageshow', (event) => {
+  redirectIfAlreadyAuthenticated();
+});
+
 // Dynamic API Base: Works when opened via file:/// or other local ports, falls back to http://localhost:3000
 const API_BASE = (window.location.protocol === 'file:' || !window.location.origin.includes(':3000'))
   ? 'http://localhost:3000'
@@ -12,6 +28,7 @@ const API_BASE = (window.location.protocol === 'file:' || !window.location.origi
 const loginForm = document.getElementById('login-form');
 const usernameInput = document.getElementById('username-input');
 const passwordInput = document.getElementById('password-input');
+const togglePasswordBtn = document.getElementById('toggle-password');
 const btnSendOtp = document.getElementById('btn-send-otp');
 const btnLogin = document.getElementById('btn-login');
 const alertBox = document.getElementById('login-alert');
@@ -33,11 +50,22 @@ const otpBoxes = [
 function showAlert(message, type = 'error') {
   if (!alertBox || !alertIcon || !alertText) return;
   alertBox.className = `login-alert visible login-alert-${type}`;
-  alertIcon.textContent = type === 'error' ? '⚠️' : (type === 'success' ? '✅' : 'ℹ️');
+  if (type === 'locked') {
+    alertIcon.textContent = '🔒';
+  } else if (type === 'error') {
+    alertIcon.textContent = '⚠️';
+  } else if (type === 'success') {
+    alertIcon.textContent = '✅';
+  } else {
+    alertIcon.textContent = 'ℹ️';
+  }
   alertText.textContent = message;
 }
 
 function clearAlert() {
+  // Do not clear alert if account is actively locked
+  if (isAccountLocked()) return;
+
   if (alertBox && alertText) {
     alertBox.className = 'login-alert';
     alertText.textContent = '';
@@ -58,6 +86,98 @@ function triggerShake() {
   void loginForm.offsetWidth; // trigger reflow
   loginForm.classList.add('shake');
 }
+
+// ==========================================================
+// Account Lockout State & Countdown Timer
+// ==========================================================
+let lockoutTimerInterval = null;
+const LOCKOUT_STORAGE_KEY = 'tres_marias_admin_lockout_until';
+
+function isAccountLocked() {
+  const storedUntil = localStorage.getItem(LOCKOUT_STORAGE_KEY);
+  return storedUntil ? parseInt(storedUntil, 10) > Date.now() : false;
+}
+
+function setFormLockedState(locked) {
+  if (usernameInput) usernameInput.disabled = locked;
+  if (passwordInput) passwordInput.disabled = locked;
+  otpBoxes.forEach(b => { if (b) b.disabled = locked; });
+  if (btnSendOtp) btnSendOtp.disabled = locked;
+  if (btnLogin) btnLogin.disabled = locked;
+  if (loginForm) {
+    if (locked) loginForm.classList.add('is-locked');
+    else loginForm.classList.remove('is-locked');
+  }
+}
+
+function updateLockoutUI() {
+  const storedUntil = localStorage.getItem(LOCKOUT_STORAGE_KEY);
+  if (!storedUntil) return;
+
+  const remainingMs = parseInt(storedUntil, 10) - Date.now();
+  if (remainingMs <= 0) {
+    stopLockoutCountdown();
+    showAlert('Lockout period has expired. You may now attempt to log in.', 'info');
+    return;
+  }
+
+  const totalSec = Math.ceil(remainingMs / 1000);
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+  showAlert(`Account locked due to 5 failed attempts. Please wait ${timeStr} before trying again.`, 'locked');
+  if (btnLogin) {
+    btnLogin.textContent = `Locked (${timeStr})`;
+  }
+}
+
+function startLockoutCountdown(seconds) {
+  if (lockoutTimerInterval) {
+    clearInterval(lockoutTimerInterval);
+  }
+
+  const expireTimestamp = Date.now() + (seconds * 1000);
+  localStorage.setItem(LOCKOUT_STORAGE_KEY, expireTimestamp.toString());
+  setFormLockedState(true);
+  updateLockoutUI();
+
+  lockoutTimerInterval = setInterval(() => {
+    const storedUntil = localStorage.getItem(LOCKOUT_STORAGE_KEY);
+    if (!storedUntil || parseInt(storedUntil, 10) <= Date.now()) {
+      stopLockoutCountdown();
+      showAlert('Lockout period has expired. You may now attempt to log in.', 'info');
+    } else {
+      updateLockoutUI();
+    }
+  }, 1000);
+}
+
+function stopLockoutCountdown() {
+  if (lockoutTimerInterval) {
+    clearInterval(lockoutTimerInterval);
+    lockoutTimerInterval = null;
+  }
+  localStorage.removeItem(LOCKOUT_STORAGE_KEY);
+  setFormLockedState(false);
+  if (btnLogin) {
+    btnLogin.textContent = 'Log In';
+  }
+}
+
+// Check on page load if account is currently locked out in this browser
+function checkLockoutOnPageLoad() {
+  const storedUntil = localStorage.getItem(LOCKOUT_STORAGE_KEY);
+  if (storedUntil) {
+    const remainingMs = parseInt(storedUntil, 10) - Date.now();
+    if (remainingMs > 0) {
+      startLockoutCountdown(Math.ceil(remainingMs / 1000));
+    } else {
+      localStorage.removeItem(LOCKOUT_STORAGE_KEY);
+    }
+  }
+}
+checkLockoutOnPageLoad();
 
 // Auto-advance through OTP input boxes
 otpBoxes.forEach((box, index) => {
@@ -117,6 +237,21 @@ if (passwordInput) {
   });
 }
 
+// Toggle password visibility (show/hide)
+if (togglePasswordBtn && passwordInput) {
+  const eyeIconShow = togglePasswordBtn.querySelector('.eye-icon-show');
+  const eyeIconHide = togglePasswordBtn.querySelector('.eye-icon-hide');
+
+  togglePasswordBtn.addEventListener('click', () => {
+    const isPassword = passwordInput.getAttribute('type') === 'password';
+    passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+    if (eyeIconShow && eyeIconHide) {
+      eyeIconShow.style.display = isPassword ? 'none' : 'block';
+      eyeIconHide.style.display = isPassword ? 'block' : 'none';
+    }
+  });
+}
+
 // ==========================================================
 // Send OTP Button: Retrieves actual OTP from MySQL via API
 // ==========================================================
@@ -151,6 +286,9 @@ if (btnSendOtp) {
       if (result.success) {
         showAlert(`${result.message} (Demo OTP: ${result.demoOtp})`, 'info');
         if (otpBoxes[0]) otpBoxes[0].focus();
+      } else if (result.locked) {
+        startLockoutCountdown(result.lockRemainingSeconds || 300);
+        triggerShake();
       } else {
         showAlert(result.message || 'Unable to send OTP.', 'error');
         if (result.field === 'username' && usernameInput && usernameError) {
@@ -161,10 +299,12 @@ if (btnSendOtp) {
       }
     } catch (err) {
       console.error('Fetch error:', err);
-      showAlert('Unable to connect to backend server. Please make sure server.js is running on port 3000.', 'error');
+      showAlert('Unable to connect to server.', 'error');
     } finally {
-      btnSendOtp.disabled = false;
-      btnSendOtp.textContent = 'Send OTP';
+      if (!isAccountLocked()) {
+        btnSendOtp.disabled = false;
+        btnSendOtp.textContent = 'Send OTP';
+      }
     }
   });
 }
@@ -175,6 +315,13 @@ if (btnSendOtp) {
 if (loginForm) {
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    // Prevent submission if account is currently locked out
+    if (isAccountLocked()) {
+      triggerShake();
+      return;
+    }
+
     clearAlert();
 
     const userVal = usernameInput ? usernameInput.value.trim() : '';
@@ -240,6 +387,7 @@ if (loginForm) {
 
       if (result.success) {
         // Login successful!
+        stopLockoutCountdown();
         showAlert(result.message, 'success');
         if (btnLogin) {
           btnLogin.textContent = 'Redirecting...';
@@ -251,8 +399,17 @@ if (loginForm) {
         sessionStorage.setItem('tres_marias_admin_user', JSON.stringify(result.user));
 
         setTimeout(() => {
-          window.location.href = 'dashboard.html';
+          window.location.replace('dashboard.html');
         }, 600);
+      } else if (result.locked) {
+        // Account locked due to 5 consecutive failed attempts
+        startLockoutCountdown(result.lockRemainingSeconds || 300);
+        triggerShake();
+        if (passwordInput && passwordError) {
+          passwordInput.classList.add('has-error');
+          passwordError.textContent = result.message;
+          passwordError.classList.add('visible');
+        }
       } else {
         // Invalid input according to MySQL check
         if (btnLogin) {

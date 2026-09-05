@@ -187,6 +187,40 @@ body {
   box-shadow: 0 0 0 3px var(--input-focus-ring);
 }
 
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.field-input.has-toggle {
+  padding-right: 36px;
+}
+
+.btn-toggle-password {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.2s ease, transform 0.1s ease;
+}
+
+.btn-toggle-password:hover {
+  color: var(--text-primary);
+}
+
+.btn-toggle-password:active {
+  transform: scale(0.95);
+}
+
 .otp-row {
   display: flex;
   align-items: center;
@@ -295,6 +329,33 @@ body {
   background-color: #eff6ff;
   border: 1px solid #bfdbfe;
   color: #1d4ed8;
+}
+
+.login-alert-locked {
+  background-color: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #9f1239;
+  font-weight: 600;
+}
+
+.login-box.is-locked {
+  box-shadow: 0 0 0 1px rgba(225, 29, 72, 0.35), var(--card-shadow);
+}
+
+.login-box.is-locked .field-input,
+.login-box.is-locked .otp-digit {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background-color: #f1f5f9 !important;
+}
+
+.login-box.is-locked .btn-send-otp,
+.login-box.is-locked .btn-login {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 @keyframes fadeIn {

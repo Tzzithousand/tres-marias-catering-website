@@ -75,7 +75,6 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 0 24px;
   position: sticky;
   top: 0;
@@ -148,7 +147,7 @@ body {
 .topbar-center {
   flex: 1;
   max-width: 520px;
-  margin: 0 20px;
+  margin: 0 auto;
 }
 
 .search-box {
@@ -490,6 +489,7 @@ body {
   display: flex;
   flex: 1;
   position: relative;
+  min-height: calc(100vh - var(--header-height));
 }
 
 /* ==================== SIDEBAR ==================== */
@@ -507,6 +507,7 @@ body {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+  min-height: calc(100vh - var(--header-height));
 }
 
 .sidebar.collapsed {
@@ -620,13 +621,22 @@ body {
   color: var(--brand-gold);
 }
 
-/* Lower Sidebar (Settings, Help) */
+/* Lower Sidebar (Settings, Help, Logout) */
 .sidebar-bottom {
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding-top: 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.nav-item-logout:hover {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+  color: #f87171 !important;
+}
+
+.nav-item-logout:hover .nav-icon {
+  color: #f87171 !important;
 }
 
 /* ==================== DASHBOARD CONTENT AREA ==================== */

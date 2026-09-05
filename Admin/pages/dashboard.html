@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tres Marias Admin - Dashboard</title>
   <link rel="stylesheet" href="../assets/css/dashboard.css">
+  <script>
+    // Immediate Auth Guard: Redirect unauthenticated visits before DOM renders
+    if (sessionStorage.getItem('tres_marias_admin_logged_in') !== 'true') {
+      window.location.replace('login.html');
+    }
+  </script>
 </head>
 <body>
 
@@ -37,7 +43,7 @@
           type="text" 
           id="global-search-input" 
           class="search-input" 
-          placeholder="Search reservations, packages, clients, logistics..."
+          placeholder="Search..."
           autocomplete="off"
         >
       </div>
@@ -69,7 +75,7 @@
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
               </svg>
               <p>No new notifications</p>
-              <span>Reservation alerts and system updates will appear here once online.</span>
+              <span>Reservation alerts and system updates will appear here.</span>
             </div>
           </div>
         </div>
@@ -87,8 +93,8 @@
         <button class="profile-btn" id="profile-menu-btn" title="Admin Profile" aria-haspopup="menu" aria-expanded="false" aria-controls="profile-dropdown">
           <img src="../assets/images/logo.jpg" alt="Admin Profile Avatar" class="profile-avatar">
           <div class="profile-info">
-            <span class="profile-name">Admin</span>
-            <span class="profile-role">Superuser</span>
+            <span class="profile-name" id="topbar-admin-name">Admin</span>
+            <span class="profile-role" id="topbar-admin-role">Superuser</span>
           </div>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="6 9 12 15 18 9"></polyline>
@@ -111,7 +117,7 @@
             <span>Settings</span>
           </a>
           <div class="dropdown-divider" role="separator"></div>
-          <a href="login.html" class="dropdown-item logout" role="menuitem" title="Log out and return to Login page">
+          <a href="#logout" class="dropdown-item logout" id="btn-topbar-logout" role="menuitem" title="Log out of Admin Dashboard">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
               <polyline points="16 17 21 12 16 7"></polyline>
@@ -123,6 +129,7 @@
       </div>
 
     </div>
+
   </header>
 
   <!-- ==================== MAIN DASHBOARD CONTAINER ==================== -->
@@ -163,22 +170,7 @@
             </a>
           </li>
 
-          <!-- 2. Reservation -->
-          <li>
-            <a href="reservation.html" class="nav-item" title="Reservation">
-              <span class="nav-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path>
-                  <line x1="16" y1="2" x2="16" y2="6"></line>
-                  <line x1="8" y1="2" x2="8" y2="6"></line>
-                  <line x1="3" y1="10" x2="21" y2="10"></line>
-                </svg>
-              </span>
-              <span class="nav-text">Reservation</span>
-            </a>
-          </li>
-
-          <!-- 3. Menu & Packages -->
+          <!-- 2. Menu & Packages -->
           <li>
             <a href="#packages" class="nav-item" title="Menu & Packages">
               <span class="nav-icon">
@@ -192,7 +184,7 @@
             </a>
           </li>
 
-          <!-- 4. Logistics -->
+          <!-- 3. Logistics -->
           <li>
             <a href="#logistics" class="nav-item" title="Logistics">
               <span class="nav-icon">
@@ -207,7 +199,7 @@
             </a>
           </li>
 
-          <!-- 5. History -->
+          <!-- 4. History -->
           <li>
             <a href="#history" class="nav-item" title="History">
               <span class="nav-icon">
@@ -220,7 +212,7 @@
             </a>
           </li>
 
-          <!-- 6. Reports -->
+          <!-- 5. Reports -->
           <li>
             <a href="#reports" class="nav-item" title="Reports">
               <span class="nav-icon">
@@ -234,7 +226,7 @@
             </a>
           </li>
 
-          <!-- 7. Outsource -->
+          <!-- 6. Outsource -->
           <li>
             <a href="#outsource" class="nav-item" title="Outsource">
               <span class="nav-icon">
@@ -249,7 +241,7 @@
             </a>
           </li>
 
-          <!-- 8. Feedbacks -->
+          <!-- 7. Feedbacks -->
           <li>
             <a href="#feedbacks" class="nav-item" title="Feedbacks">
               <span class="nav-icon">
@@ -286,267 +278,26 @@
           </span>
           <span class="nav-text">Help</span>
         </a>
+
+        <a href="#logout" class="nav-item nav-item-logout" id="btn-sidebar-logout" title="Log Out">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </span>
+          <span class="nav-text">Log Out</span>
+        </a>
       </div>
 
     </aside>
 
     <!-- ==================== DASHBOARD CONTENT ==================== -->
-    <main class="dashboard-content">
-      
-      <!-- Greeting and Status Row -->
-      <div class="dashboard-header-row">
-        <div>
-          <h1 class="page-title">Dashboard Overview</h1>
-          <p class="page-subtitle">Welcome back, Admin! Here is the latest overview of catering services.</p>
-        </div>
-        <div class="header-status-pill">
-          <span class="status-dot"></span>
-          <span>System Online • Sep 04, 2026</span>
-        </div>
-      </div>
-
-      <!-- ==================== TOP GRID (GRAPH & 3 STATS) ==================== -->
-      <div class="dashboard-grid-top">
-        
-        <!-- Graph of Revenue Card -->
-        <section class="dash-card revenue-card">
-          <div class="card-header">
-            <h2 class="card-title">Graph of Revenue</h2>
-            
-            <div class="filter-controls">
-              <!-- Period Filter Tabs (Day, Week, Month) -->
-              <div class="filter-tabs">
-                <button type="button" class="filter-tab" data-period="day">Day</button>
-                <button type="button" class="filter-tab" data-period="week">Week</button>
-                <button type="button" class="filter-tab active" data-period="month">Month</button>
-              </div>
-
-              <!-- Date Selector Dropdowns matching Wireframe (MM / DD / YYYY) -->
-              <div class="date-select-row">
-                <select class="select-filter" id="select-month" aria-label="Select Month">
-                  <option value="09" selected>Sep</option>
-                  <option value="10">Oct</option>
-                  <option value="11">Nov</option>
-                  <option value="12">Dec</option>
-                </select>
-                <select class="select-filter" id="select-year" aria-label="Select Year">
-                  <option value="2026" selected>2026</option>
-                  <option value="2025">2025</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div class="card-body-chart">
-            <!-- Revenue Quick Stats Bar -->
-            <div class="chart-summary-bar">
-              <div>
-                <span style="font-size: 11.5px; color: #64748b; font-weight: 600; text-transform: uppercase;">Total Revenue</span>
-                <div class="chart-total-amount" id="chart-total-revenue">₱0.00</div>
-              </div>
-              <div class="chart-comparison" id="chart-comparison-rate">
-                0.0% vs last month
-              </div>
-            </div>
-
-            <!-- SVG Bar Graph with Tooltip -->
-            <div class="chart-container">
-              <svg id="revenue-chart-svg" class="chart-svg"></svg>
-              <div id="chart-tooltip" class="chart-tooltip"></div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Right Stats Column (3 Cards matching wireframe) -->
-        <div class="stats-column">
-          
-          <!-- 1. Net Total Card -->
-          <div class="dash-card stat-card" id="stat-card-net-total">
-            <div class="stat-icon-wrapper stat-icon-gold">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="1" x2="12" y2="23"></line>
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-              </svg>
-            </div>
-            <div class="stat-details">
-              <span class="stat-label">Net total</span>
-              <div class="stat-value" id="stat-net-total">₱0.00</div>
-              <span class="stat-meta neutral" id="stat-net-total-meta">0.0% Net Margin • Fresh System</span>
-            </div>
-          </div>
-
-          <!-- 2. Customers Card -->
-          <div class="dash-card stat-card" id="stat-card-customers">
-            <div class="stat-icon-wrapper stat-icon-blue">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="9" cy="7" r="4"></circle>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-              </svg>
-            </div>
-            <div class="stat-details">
-              <span class="stat-label">Customers</span>
-              <div class="stat-value" id="stat-customers-count">0</div>
-              <span class="stat-meta neutral" id="stat-customers-meta">0 Registered Customers</span>
-            </div>
-          </div>
-
-          <!-- 3. Upcoming Event Card -->
-          <div class="dash-card stat-card" id="stat-card-upcoming-event" style="cursor: pointer;" title="Click to view in Reservations">
-            <div class="stat-icon-wrapper stat-icon-green">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="16" y1="2" x2="16" y2="6"></line>
-                <line x1="8" y1="2" x2="8" y2="6"></line>
-                <line x1="3" y1="10" x2="21" y2="10"></line>
-              </svg>
-            </div>
-            <div class="stat-details">
-              <span class="stat-label">Upcoming Event</span>
-              <div class="stat-value empty-val" id="stat-upcoming-event-val">No upcoming events</div>
-              <span class="stat-meta neutral" id="stat-upcoming-event-meta">No scheduled events</span>
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-
-      <!-- ==================== BOTTOM GRID (EVENTS & CALENDAR) ==================== -->
-      <div class="dashboard-grid-bottom">
-        
-        <!-- Left Column: Event Today & Pending Approval -->
-        <div class="events-column">
-          
-          <!-- Event Today Card -->
-          <section class="dash-card event-box-card" id="card-event-today">
-            <div class="event-card-header-bar">
-              <h2 class="card-title">Event today</h2>
-              <span class="event-tag empty-tag" id="tag-event-today">0 Events</span>
-            </div>
-            
-            <div class="event-content-row" id="event-today-content-row">
-              <!-- Side Icon Placeholder: Designed to dynamically display the category icon of the reserved package (e.g. birthday, wedding, debut, corporate) -->
-              <div class="event-category-icon-box" id="event-today-category-icon" aria-hidden="true" style="display: none;" title="Package Category Icon">
-                <!-- Dynamically injected SVG category icon -->
-              </div>
-              
-              <!-- Empty state display -->
-              <div class="event-empty-state" id="event-today-empty-state">
-                <div class="empty-state-icon">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                    <line x1="9" y1="15" x2="15" y2="15"></line>
-                  </svg>
-                </div>
-                <div class="empty-state-text">
-                  <h3 class="empty-title">No events today</h3>
-                  <p class="empty-desc">No scheduled catering event for today.</p>
-                </div>
-              </div>
-
-              <!-- Ready layout for dynamic event rendering once an event is added -->
-              <div class="event-info-list" id="event-today-info-list" style="display: none;">
-                <div class="event-info-item">
-                  <span class="event-info-label">Name:</span>
-                  <span class="event-info-val" id="today-event-name">--</span>
-                </div>
-                <div class="event-info-item">
-                  <span class="event-info-label">Event Date:</span>
-                  <span class="event-info-val" id="today-event-date">--</span>
-                </div>
-                <div class="event-info-item">
-                  <span class="event-info-label">Location:</span>
-                  <span class="event-info-val" id="today-event-location">--</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <!-- Pending Approval Card -->
-          <section class="dash-card event-box-card" id="card-pending-approval">
-            <div class="event-card-header-bar">
-              <h2 class="card-title">Pending Approval</h2>
-              <span class="event-tag empty-tag" id="tag-pending-approval">0 Pending</span>
-            </div>
-
-            <div class="event-content-row" id="pending-approval-content-row">
-              <!-- Empty state display -->
-              <div class="event-empty-state" id="pending-empty-state">
-                <div class="empty-state-icon">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                  </svg>
-                </div>
-                <div class="empty-state-text">
-                  <h3 class="empty-title">No pending approvals</h3>
-                  <p class="empty-desc">All reservations have been processed. No pending approvals at the moment.</p>
-                </div>
-              </div>
-
-              <!-- Ready layout for dynamically rendered pending requests -->
-              <div class="event-info-list" id="pending-info-list" style="display: none;">
-                <div class="event-info-item">
-                  <span class="event-info-label">Name:</span>
-                  <span class="event-info-val" id="pending-event-name">--</span>
-                </div>
-                <div class="event-info-item">
-                  <span class="event-info-label">Event Date:</span>
-                  <span class="event-info-val" id="pending-event-date">--</span>
-                </div>
-                <div class="event-info-item">
-                  <span class="event-info-label">Location:</span>
-                  <span class="event-info-val" id="pending-event-location">--</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="event-actions" id="pending-actions" style="display: none;">
-              <button type="button" class="btn-action-sm btn-review" id="btn-review-pending">Review Details</button>
-              <button type="button" class="btn-action-sm btn-approve" id="btn-approve-pending">Approve</button>
-            </div>
-          </section>
-
-        </div>
-
-        <!-- Right Column: Calendar Widget -->
-        <section class="dash-card calendar-card">
-          <div class="calendar-header">
-            <h2 class="calendar-month-year" id="cal-month-year">September 2026</h2>
-            <div class="cal-nav-buttons">
-              <button type="button" class="cal-nav-btn" id="cal-prev" title="Previous Month" aria-label="Previous Month">&lt;</button>
-              <button type="button" class="cal-nav-btn" id="cal-next" title="Next Month" aria-label="Next Month">&gt;</button>
-            </div>
-          </div>
-
-          <!-- Calendar Days of Week -->
-          <div class="calendar-weekdays">
-            <span class="calendar-weekday">Su</span>
-            <span class="calendar-weekday">Mo</span>
-            <span class="calendar-weekday">Tu</span>
-            <span class="calendar-weekday">We</span>
-            <span class="calendar-weekday">Th</span>
-            <span class="calendar-weekday">Fr</span>
-            <span class="calendar-weekday">Sa</span>
-          </div>
-
-          <!-- Calendar Days Grid (Populated dynamically by JavaScript) -->
-          <div class="calendar-days-grid" id="cal-days-grid"></div>
-
-          <!-- Calendar Event Selected Preview -->
-          <div class="cal-event-preview" id="cal-event-text">
-            No scheduled event for this day.
-          </div>
-        </section>
-
-      </div>
-
+    <main class="dashboard-content" id="dashboard-content">
+      <!-- Main content area cleared of all content boxes, cards, and widgets -->
     </main>
+
   </div>
 
   <!-- Dashboard JavaScript -->
