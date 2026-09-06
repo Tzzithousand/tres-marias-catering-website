@@ -42,6 +42,9 @@ redirectIfAlreadyAuthenticated();
 // Handle browser Back-Forward Cache (BFCache) when navigating via Back button
 window.addEventListener('pageshow', (event) => {
   redirectIfAlreadyAuthenticated();
+  if (typeof updateSendOtpButtonState === 'function') {
+    updateSendOtpButtonState();
+  }
 });
 
 const loginForm = document.getElementById('login-form');
@@ -127,6 +130,9 @@ function setFormLockedState(locked) {
     if (locked) loginForm.classList.add('is-locked');
     else loginForm.classList.remove('is-locked');
   }
+  if (!locked) {
+    updateSendOtpButtonState();
+  }
 }
 
 function updateLockoutUI() {
@@ -182,6 +188,7 @@ function stopLockoutCountdown() {
   if (btnLogin) {
     btnLogin.textContent = 'Log In';
   }
+  updateSendOtpButtonState();
 }
 
 // ==========================================================
@@ -209,6 +216,9 @@ function setOtpFieldsLockedState(locked) {
     if (!locked && !isAccountLocked()) {
       btnLogin.textContent = 'Log In';
     }
+  }
+  if (!locked) {
+    updateSendOtpButtonState();
   }
 }
 
@@ -267,13 +277,13 @@ function stopOtpLockoutCountdown() {
   localStorage.removeItem(OTP_LOCKOUT_STORAGE_KEY);
   setOtpFieldsLockedState(false);
   if (btnSendOtp) {
-    btnSendOtp.disabled = false;
     btnSendOtp.textContent = 'Send OTP';
   }
   if (btnLogin && !isAccountLocked()) {
     btnLogin.disabled = false;
     btnLogin.textContent = 'Log In';
   }
+  updateSendOtpButtonState();
 }
 
 // Check on page load if account or OTP is currently locked out in this browser
@@ -301,6 +311,7 @@ function checkLockoutOnPageLoad() {
   }
 }
 checkLockoutOnPageLoad();
+updateSendOtpButtonState();
 
 // Handle session timeout redirection from dashboard (REQ-008: 15-minute inactivity)
 function checkSessionTimeoutNotice() {
@@ -357,19 +368,41 @@ otpBoxes.forEach((box, index) => {
   });
 });
 
-// Clear error highlights on user input
+// Dynamic Send OTP button readiness state (requires both username/email and password)
+function updateSendOtpButtonState() {
+  if (isAccountLocked() || isOtpLocked()) return;
+
+  const hasUsername = Boolean(usernameInput && usernameInput.value.trim().length > 0);
+  const hasPassword = Boolean(passwordInput && passwordInput.value.length > 0);
+  const isReady = hasUsername && hasPassword;
+
+  if (btnSendOtp) {
+    btnSendOtp.disabled = !isReady;
+    if (isReady) {
+      btnSendOtp.classList.add('active-ready');
+    } else {
+      btnSendOtp.classList.remove('active-ready');
+    }
+  }
+}
+
+// Clear error highlights on user input and update button readiness
 if (usernameInput) {
   usernameInput.addEventListener('input', () => {
     usernameInput.classList.remove('has-error');
     if (usernameError) usernameError.classList.remove('visible');
+    updateSendOtpButtonState();
   });
+  usernameInput.addEventListener('change', updateSendOtpButtonState);
 }
 
 if (passwordInput) {
   passwordInput.addEventListener('input', () => {
     passwordInput.classList.remove('has-error');
     if (passwordError) passwordError.classList.remove('visible');
+    updateSendOtpButtonState();
   });
+  passwordInput.addEventListener('change', updateSendOtpButtonState);
 }
 
 // Toggle password visibility (show/hide)
@@ -394,6 +427,7 @@ if (btnSendOtp) {
   btnSendOtp.addEventListener('click', async () => {
     clearAlert();
     const enteredUsername = usernameInput ? usernameInput.value.trim() : '';
+    const enteredPassword = passwordInput ? passwordInput.value : '';
     
     if (!enteredUsername) {
       if (usernameInput) usernameInput.classList.add('has-error');
@@ -403,6 +437,19 @@ if (btnSendOtp) {
       }
       showAlert('Please enter your username or email before requesting an OTP.', 'error');
       if (usernameInput) usernameInput.focus();
+      triggerShake();
+      return;
+    }
+
+    if (!enteredPassword) {
+      if (passwordInput) passwordInput.classList.add('has-error');
+      if (passwordError) {
+        passwordError.textContent = 'Please enter your password first.';
+        passwordError.classList.add('visible');
+      }
+      showAlert('Please enter your password before requesting an OTP.', 'error');
+      if (passwordInput) passwordInput.focus();
+      triggerShake();
       return;
     }
 
@@ -413,7 +460,10 @@ if (btnSendOtp) {
       const response = await fetch(`${API_BASE}/api/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usernameOrEmail: enteredUsername })
+        body: JSON.stringify({ 
+          usernameOrEmail: enteredUsername,
+          password: enteredPassword
+        })
       });
 
       const result = await response.json();
@@ -433,15 +483,22 @@ if (btnSendOtp) {
           usernameInput.classList.add('has-error');
           usernameError.textContent = result.message;
           usernameError.classList.add('visible');
+          usernameInput.focus();
+        } else if (result.field === 'password' && passwordInput && passwordError) {
+          passwordInput.classList.add('has-error');
+          passwordError.textContent = result.message;
+          passwordError.classList.add('visible');
+          passwordInput.focus();
         }
+        triggerShake();
       }
     } catch (err) {
       console.error('Fetch error:', err);
       showAlert('Unable to connect to server.', 'error');
     } finally {
       if (!isAccountLocked() && !isOtpLocked()) {
-        btnSendOtp.disabled = false;
         btnSendOtp.textContent = 'Send OTP';
+        updateSendOtpButtonState();
       }
     }
   });

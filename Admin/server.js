@@ -21,6 +21,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Root path redirect directly to logo.html
+app.get('/', (req, res) => {
+  res.redirect('/pages/logo.html');
+});
+
 // Serve frontend static files (HTML, CSS, JS, Images)
 // Prevent browsers from caching sensitive HTML pages (Login & Dashboard)
 app.use(express.static(path.join(__dirname), {
@@ -172,22 +177,32 @@ app.post('/api/check-lockout', async (req, res) => {
 // ==========================================================
 app.post('/api/send-otp', async (req, res) => {
   try {
-    const { usernameOrEmail } = req.body;
+    const { usernameOrEmail, email, password } = req.body;
+    const accountIdentifier = (usernameOrEmail || email || '').trim();
 
-    if (!usernameOrEmail) {
+    if (!accountIdentifier) {
       return res.status(400).json({ 
         success: false, 
+        field: 'username',
         message: 'Please enter your username or email first.' 
+      });
+    }
+
+    if (!password) {
+      return res.status(400).json({ 
+        success: false, 
+        field: 'password',
+        message: 'Please enter your password first.' 
       });
     }
 
     // Find admin in the database
     const [users] = await db.query(
-      `SELECT user_id, full_name, email, phone_number, role, lockout_until, otp_lockout_until 
+      `SELECT user_id, full_name, email, password_hash, role, status, lockout_until, otp_lockout_until, failed_login_attempts 
        FROM users 
        WHERE (email = ? OR full_name = ?) AND role IN ('admin', 'staff')
        LIMIT 1`,
-      [usernameOrEmail.trim(), usernameOrEmail.trim()]
+      [accountIdentifier, accountIdentifier]
     );
 
     if (users.length === 0) {
@@ -200,6 +215,14 @@ app.post('/api/send-otp', async (req, res) => {
 
     const admin = users[0];
     const now = Date.now();
+
+    // Verify account status
+    if (admin.status !== 'active') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'This account is deactivated. Please contact management.' 
+      });
+    }
 
     // Check if account is currently locked out (Password brute-force)
     if (admin.lockout_until) {
@@ -219,6 +242,8 @@ app.post('/api/send-otp', async (req, res) => {
           'UPDATE users SET failed_login_attempts = 0, lockout_until = NULL WHERE user_id = ?',
           [admin.user_id]
         );
+        admin.failed_login_attempts = 0;
+        admin.lockout_until = null;
       }
     }
 
@@ -240,6 +265,45 @@ app.post('/api/send-otp', async (req, res) => {
           'UPDATE users SET failed_otp_attempts = 0, otp_lockout_until = NULL WHERE user_id = ?',
           [admin.user_id]
         );
+        admin.failed_otp_attempts = 0;
+        admin.otp_lockout_until = null;
+      }
+    }
+
+    // Check Password Validity
+    let isPasswordValid = false;
+    if (admin.password_hash && (admin.password_hash.startsWith('$2y$') || admin.password_hash.startsWith('$2a$') || admin.password_hash.startsWith('$2b$'))) {
+      const normalizedHash = admin.password_hash.replace('$2y$', '$2a$');
+      isPasswordValid = await bcrypt.compare(password, normalizedHash);
+    }
+
+    if (!isPasswordValid) {
+      const newPasswordAttempts = (admin.failed_login_attempts || 0) + 1;
+      const isLocked = newPasswordAttempts >= 5;
+
+      if (isLocked) {
+        await db.query(
+          'UPDATE users SET failed_login_attempts = ?, lockout_until = DATE_ADD(NOW(), INTERVAL 5 MINUTE) WHERE user_id = ?',
+          [newPasswordAttempts, admin.user_id]
+        );
+        return res.status(423).json({
+          success: false,
+          locked: true,
+          lockRemainingSeconds: 300,
+          field: 'password',
+          message: 'Account locked due to 5 consecutive failed attempts. Please wait 05:00 before trying again.'
+        });
+      } else {
+        await db.query(
+          'UPDATE users SET failed_login_attempts = ? WHERE user_id = ?',
+          [newPasswordAttempts, admin.user_id]
+        );
+        const remainingAttempts = 5 - newPasswordAttempts;
+        return res.status(401).json({
+          success: false,
+          field: 'password',
+          message: `Incorrect password. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.`
+        });
       }
     }
 
@@ -673,11 +737,11 @@ app.get('/api/verify-session', (req, res) => {
 
 // Fallback route for index
 app.get('/', (req, res) => {
-  res.redirect('/pages/login.html');
+  res.redirect('/pages/logo.html');
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`Tres Marias Admin Server running at: http://localhost:${PORT}`);
-  console.log(`Login Page URL: http://localhost:${PORT}/pages/login.html`);
+  console.log(`Landing Page URL: http://localhost:${PORT}/pages/logo.html`);
 });

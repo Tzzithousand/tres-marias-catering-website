@@ -125,15 +125,41 @@ Files:
   * login.js checks for reason=inactivity query parameter and displays:
     "Your session has timed out due to 15 minutes of inactivity. Please log in again."
 
-================================================================================
-MODIFIED FILES SUMMARY (git status):
-- Admin/pages/dashboard.html
-- Admin/pages/logo.html
-- Admin/assets/css/dashboard.css
-- Admin/assets/js/dashboard.js
+
+9. FIX FOR SEND OTP BUTTON STATE & PASSWORD VALIDATION
+--------------------------------------------------------------------------------
+Files:
+- Admin/pages/login.html
+- Admin/assets/css/style.css
 - Admin/assets/js/login.js
 - Admin/server.js
-- Admin/database/schema.sql
-- Admin/package.json
-- Admin/package-lock.json
+
+- Issue Resolved:
+  * Previously, the "Send OTP" button was enabled by default and only validated the
+    username/email field on click, allowing users to request an OTP without entering
+    their password.
+  * The hover effect on .btn-send-otp made it look clickable even when empty.
+- Frontend Enhancements:
+  * Added disabled attribute to <button id="btn-send-otp"> in login.html.
+  * Added .btn-send-otp:disabled styling with not-allowed cursor and muted opacity.
+  * Added updateSendOtpButtonState() in login.js to dynamically enable the Send OTP
+    button only when BOTH username/email AND password have input values.
+  * Added click validation ensuring both username/email and password fields are present,
+    displaying targeted error banners, field highlights, and card shake animation if
+    either is missing.
+- Backend Hardening (/api/send-otp in server.js):
+  * Now requires both usernameOrEmail and password in the request body.
+  * Validates password validity with bcrypt.compare() before generating the OTP.
+  * If the password is incorrect, increments failed_login_attempts and returns a 401
+    status with field: 'password', maintaining 5-minute brute-force lockout protection.
+  * Generates and returns a fresh 4-digit OTP only upon valid credential verification.
+
+================================================================================
+MODIFIED FILES SUMMARY:
+- Admin/pages/login.html
+- Admin/pages/logo.html
+- Admin/assets/css/style.css
+- Admin/assets/js/login.js
+- Admin/server.js
+- index.html
 ================================================================================

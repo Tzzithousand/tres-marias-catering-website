@@ -9,14 +9,30 @@
     // If admin is already logged in with a valid token, redirect directly to dashboard
     if (sessionStorage.getItem('tres_marias_token') && sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
       window.location.replace('dashboard.html');
+    } else {
+      // Automatically redirect to login page after splash presentation
+      const SPLASH_DURATION_MS = 2500;
+      const splashTimer = setTimeout(function() {
+        window.location.replace('login.html');
+      }, SPLASH_DURATION_MS);
+
+      // If the user clicks the logo, proceed immediately without waiting
+      window.addEventListener('DOMContentLoaded', function() {
+        const logoLink = document.querySelector('.logo-circle');
+        if (logoLink) {
+          logoLink.addEventListener('click', function() {
+            clearTimeout(splashTimer);
+          });
+        }
+      });
     }
   </script>
 </head>
 <body>
 
-  <!-- Pure HTML & CSS only: Logo circle linking to login.html -->
+  <!-- Logo circle linking to login.html -->
   <a href="login.html" class="logo-circle" title="Tres Marias Catering Services - Click to Login">
-    <img src="../assets/images/logo.jpg" alt="Tres Marias Catering Services Logo" class="logo-img" width="220" height="220" fetchpriority="high" decoding="async">
+    <img src="../assets/images/logo.jpg" alt="Tres Marias Catering Services Logo" class="logo-img" width="500" height="500" fetchpriority="high" decoding="async">
   </a>
 
 </body>

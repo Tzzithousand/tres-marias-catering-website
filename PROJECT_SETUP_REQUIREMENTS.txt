@@ -183,7 +183,7 @@ JWT_SECRET="tres_marias_c4t3r1ng_s3cur3_jwt_t0k3n_k3y_9824_vps_2026"
 
 IMPORTANT NOTES FOR TEAM MEMBERS:
 - If using standard MySQL Workbench / Server:
-  Replace "YourMySQLPasswordHere" with the root password you created when installing MySQL (e.g., "Admin_123#" or "root").
+  Replace "YourMySQLPasswordHere" with the root password you created when installing MySQL (e.g., "password123" or "root").
 - If using XAMPP:
   By default, XAMPP's root user has NO password. In that case, set:
   DB_PASSWORD=""
