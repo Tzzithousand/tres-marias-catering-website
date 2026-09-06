@@ -61,7 +61,7 @@ Admin/
 
 ### 3. Frontend Static Pages
 
-- You can access the application through the running server at `http://localhost:3000/pages/login.html` (or `http://localhost:3000`).
+- You can access the application through the running server at `http://localhost:3000/pages/logo.html` (or `http://localhost:3000`).
 - Alternatively, you can open `index.html` or `pages/logo.html` directly in any modern browser.
 
 ---

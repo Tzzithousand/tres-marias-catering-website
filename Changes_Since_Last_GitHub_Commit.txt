@@ -154,6 +154,23 @@ Files:
     status with field: 'password', maintaining 5-minute brute-force lockout protection.
   * Generates and returns a fresh 4-digit OTP only upon valid credential verification.
 
+
+10. LANDING PAGE CORRECTION (LOGO LANDING PAGE)
+--------------------------------------------------------------------------------
+Files:
+- Admin/server.js
+- Admin/pages/logo.html
+- Admin/index.html
+- PROJECT_SETUP_REQUIREMENTS.txt
+- README.md
+
+- Corrected root application routing in server.js from /pages/login.html to /pages/logo.html.
+- Added explicit GET / route redirecting to /pages/logo.html before static file serving.
+- Removed auto-redirect setTimeout from logo.html so users land and remain on the
+  logo screen until clicking the logo to proceed to login.html.
+- Maintained auth guards: if the administrator is already authenticated, logo.html and
+  index.html redirect directly to dashboard.html.
+
 ================================================================================
 MODIFIED FILES SUMMARY:
 - Admin/pages/login.html
@@ -161,5 +178,8 @@ MODIFIED FILES SUMMARY:
 - Admin/assets/css/style.css
 - Admin/assets/js/login.js
 - Admin/server.js
+- Admin/index.html
 - index.html
+- PROJECT_SETUP_REQUIREMENTS.txt
+- README.md
 ================================================================================

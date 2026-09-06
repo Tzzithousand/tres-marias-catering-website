@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tres Marias Admin - Redirecting...</title>
   <script>
-    if (sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
+    if (sessionStorage.getItem('tres_marias_token') && sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
       window.location.replace("pages/dashboard.html");
     } else {
       window.location.replace("pages/logo.html");

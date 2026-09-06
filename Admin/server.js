@@ -21,6 +21,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Root landing page route: direct entry point to logo landing page
+app.get('/', (req, res) => {
+  res.redirect('/pages/logo.html');
+});
+
 // Serve frontend static files (HTML, CSS, JS, Images)
 // Prevent browsers from caching sensitive HTML pages (Login & Dashboard)
 app.use(express.static(path.join(__dirname), {
@@ -681,13 +686,13 @@ app.get('/api/verify-session', (req, res) => {
   }
 });
 
-// Fallback route for index
+// Landing page route (redirects root to logo landing page)
 app.get('/', (req, res) => {
-  res.redirect('/pages/login.html');
+  res.redirect('/pages/logo.html');
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`Tres Marias Admin Server running at: http://localhost:${PORT}`);
-  console.log(`Login Page URL: http://localhost:${PORT}/pages/login.html`);
+  console.log(`Landing Page URL: http://localhost:${PORT}/pages/logo.html`);
 });
