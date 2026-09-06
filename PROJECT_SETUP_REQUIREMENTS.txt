@@ -297,7 +297,7 @@ STEP 7: Start the Server
     npm start
 - You should see the following confirmation messages:
     Tres Marias Admin Server running at: http://localhost:3000
-    Login Page URL: http://localhost:3000/pages/login.html
+    Landing Page URL: http://localhost:3000/pages/logo.html
     Successfully connected to tres_marias_user_db
 
 STEP 8: Test in Browser

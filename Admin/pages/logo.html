@@ -9,22 +9,6 @@
     // If admin is already logged in with a valid token, redirect directly to dashboard
     if (sessionStorage.getItem('tres_marias_token') && sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
       window.location.replace('dashboard.html');
-    } else {
-      // Automatically redirect to login page after splash presentation
-      const SPLASH_DURATION_MS = 2500;
-      const splashTimer = setTimeout(function() {
-        window.location.replace('login.html');
-      }, SPLASH_DURATION_MS);
-
-      // If the user clicks the logo, proceed immediately without waiting
-      window.addEventListener('DOMContentLoaded', function() {
-        const logoLink = document.querySelector('.logo-circle');
-        if (logoLink) {
-          logoLink.addEventListener('click', function() {
-            clearTimeout(splashTimer);
-          });
-        }
-      });
     }
   </script>
 </head>

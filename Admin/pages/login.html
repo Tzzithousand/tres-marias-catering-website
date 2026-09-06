@@ -6,8 +6,8 @@
   <title>Tres Marias Admin - Login</title>
   <link rel="stylesheet" href="../assets/css/style.css">
   <script>
-    // Immediate Route Guard: If admin is already logged in, redirect directly to dashboard
-    if (sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
+    // Immediate Route Guard: If admin has an active session and token, redirect directly to dashboard
+    if (sessionStorage.getItem('tres_marias_token') && sessionStorage.getItem('tres_marias_admin_logged_in') === 'true') {
       window.location.replace('dashboard.html');
     }
   </script>

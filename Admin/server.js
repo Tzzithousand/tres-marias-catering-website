@@ -17,20 +17,21 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'tres_marias_c4t3r1ng_s3cur3_jwt_t0k3n_k3y_9824_vps_2026';
 
 // Middlewares
+app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Root path redirect directly to logo.html
+// Root landing page route: direct entry point to logo landing page
 app.get('/', (req, res) => {
   res.redirect('/pages/logo.html');
 });
 
 // Serve frontend static files (HTML, CSS, JS, Images)
-// Prevent browsers from caching sensitive HTML pages (Login & Dashboard)
+// Prevent browsers from caching sensitive assets (Login, Dashboard, JS logic)
 app.use(express.static(path.join(__dirname), {
   setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html')) {
+    if (filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css')) {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
@@ -93,11 +94,12 @@ app.get('/api/health', async (req, res) => {
 });
 
 // ==========================================================
-// 2. CHECK LOCKOUT STATUS ENDPOINT (POST /api/check-lockout)
+// 2. CHECK LOCKOUT STATUS ENDPOINT (POST & GET /api/check-lockout)
 // ==========================================================
-app.post('/api/check-lockout', async (req, res) => {
+const handleCheckLockout = async (req, res) => {
   try {
-    const { usernameOrEmail } = req.body;
+    const rawVal = req.body?.usernameOrEmail || req.query?.usernameOrEmail || req.query?.email;
+    const usernameOrEmail = rawVal ? rawVal.trim() : '';
     if (!usernameOrEmail) {
       return res.json({ locked: false, otpLocked: false });
     }
@@ -107,7 +109,7 @@ app.post('/api/check-lockout', async (req, res) => {
        FROM users 
        WHERE (email = ? OR full_name = ?) 
        LIMIT 1`,
-      [usernameOrEmail.trim(), usernameOrEmail.trim()]
+      [usernameOrEmail, usernameOrEmail]
     );
 
     if (rows.length === 0) {
@@ -170,7 +172,10 @@ app.post('/api/check-lockout', async (req, res) => {
   } catch (err) {
     return res.json({ locked: false, otpLocked: false });
   }
-});
+};
+
+app.post('/api/check-lockout', handleCheckLockout);
+app.get('/api/check-lockout', handleCheckLockout);
 
 // ==========================================================
 // 3. SEND OTP ENDPOINT (POST /api/send-otp)
@@ -192,13 +197,14 @@ app.post('/api/send-otp', async (req, res) => {
       return res.status(400).json({ 
         success: false, 
         field: 'password',
-        message: 'Please enter your password first.' 
+        message: 'Please enter your password before requesting an OTP.' 
       });
     }
 
     // Find admin in the database
     const [users] = await db.query(
-      `SELECT user_id, full_name, email, password_hash, role, status, lockout_until, otp_lockout_until, failed_login_attempts 
+      `SELECT user_id, full_name, email, password_hash, status, phone_number, role, 
+              failed_login_attempts, lockout_until, failed_otp_attempts, otp_lockout_until 
        FROM users 
        WHERE (email = ? OR full_name = ?) AND role IN ('admin', 'staff')
        LIMIT 1`,
@@ -216,7 +222,7 @@ app.post('/api/send-otp', async (req, res) => {
     const admin = users[0];
     const now = Date.now();
 
-    // Verify account status
+    // Check account status
     if (admin.status !== 'active') {
       return res.status(403).json({ 
         success: false, 
@@ -224,7 +230,7 @@ app.post('/api/send-otp', async (req, res) => {
       });
     }
 
-    // Check if account is currently locked out (Password brute-force)
+    // Check if account is currently locked out (Password brute-force: 5 minutes)
     if (admin.lockout_until) {
       const lockExpiry = new Date(admin.lockout_until).getTime();
 
@@ -270,44 +276,56 @@ app.post('/api/send-otp', async (req, res) => {
       }
     }
 
-    // Check Password Validity
+    // Validate password
     let isPasswordValid = false;
     if (admin.password_hash && (admin.password_hash.startsWith('$2y$') || admin.password_hash.startsWith('$2a$') || admin.password_hash.startsWith('$2b$'))) {
       const normalizedHash = admin.password_hash.replace('$2y$', '$2a$');
       isPasswordValid = await bcrypt.compare(password, normalizedHash);
+    } else if (admin.password_hash && admin.password_hash === password) {
+      // Plain-text development fallback
+      isPasswordValid = true;
     }
 
     if (!isPasswordValid) {
-      const newPasswordAttempts = (admin.failed_login_attempts || 0) + 1;
-      const isLocked = newPasswordAttempts >= 5;
+      const newAttempts = (admin.failed_login_attempts || 0) + 1;
 
-      if (isLocked) {
+      if (newAttempts >= 5) {
         await db.query(
-          'UPDATE users SET failed_login_attempts = ?, lockout_until = DATE_ADD(NOW(), INTERVAL 5 MINUTE) WHERE user_id = ?',
-          [newPasswordAttempts, admin.user_id]
+          `UPDATE users 
+           SET failed_login_attempts = ?, lockout_until = DATE_ADD(NOW(), INTERVAL 5 MINUTE) 
+           WHERE user_id = ?`,
+          [newAttempts, admin.user_id]
         );
+
+        console.warn(`🔒 [ACCOUNT LOCKED via Send OTP] Admin "${admin.full_name}" (${admin.email}) locked for 5 minutes after 5 failed password attempts.`);
+
         return res.status(423).json({
           success: false,
           locked: true,
           lockRemainingSeconds: 300,
           field: 'password',
-          message: 'Account locked due to 5 consecutive failed attempts. Please wait 05:00 before trying again.'
+          passwordMessage: 'Account locked! You have exceeded 5 failed login attempts. Access is locked for 5 minutes.',
+          message: 'Account locked! You have exceeded 5 failed login attempts. Access is locked for 5 minutes.'
         });
       } else {
         await db.query(
           'UPDATE users SET failed_login_attempts = ? WHERE user_id = ?',
-          [newPasswordAttempts, admin.user_id]
+          [newAttempts, admin.user_id]
         );
-        const remainingAttempts = 5 - newPasswordAttempts;
+
+        const attemptsRemaining = 5 - newAttempts;
+        const msg = `Incorrect password. ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining before account lockout.`;
         return res.status(401).json({
           success: false,
           field: 'password',
-          message: `Incorrect password. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.`
+          attemptsRemaining: attemptsRemaining,
+          passwordMessage: msg,
+          message: msg
         });
       }
     }
 
-    // Generate a new 4-digit OTP code (Example: 4821)
+    // Password is valid! Generate a new 4-digit OTP code (Example: 4821)
     const newOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
     // Save the new OTP to the MySQL database (valid for 5 minutes per REQ-004)
@@ -457,6 +475,9 @@ app.post('/api/login', async (req, res) => {
     if (user.password_hash && (user.password_hash.startsWith('$2y$') || user.password_hash.startsWith('$2a$') || user.password_hash.startsWith('$2b$'))) {
       const normalizedHash = user.password_hash.replace('$2y$', '$2a$');
       isPasswordValid = await bcrypt.compare(password, normalizedHash);
+    } else if (user.password_hash && user.password_hash === password) {
+      // Fallback for plain-text testing/development in phpMyAdmin
+      isPasswordValid = true;
     }
 
     // 6. Check OTP Validity and Expiration (REQ-004: 5-minute expiration limit)
@@ -515,7 +536,9 @@ app.post('/api/login', async (req, res) => {
 
       const otpMsg = isOtpExpired
         ? 'OTP code has expired (5-minute limit). Please request a new code.'
-        : `Invalid OTP code. ${otpRemaining} attempt${otpRemaining !== 1 ? 's' : ''} remaining before OTP lockout.`;
+        : (!user.otp_code 
+            ? 'No active OTP found. Please click "Send OTP" first.'
+            : `Invalid OTP code. ${otpRemaining} attempt${otpRemaining !== 1 ? 's' : ''} remaining before OTP lockout.`);
 
       const passMsg = isPasswordLocked
         ? 'Account locked! 5 failed password attempts reached. Locked for 5 minutes.'
@@ -629,7 +652,9 @@ app.post('/api/login', async (req, res) => {
         const otpAttemptsRemaining = 5 - newOtpAttempts;
         const msg = isOtpExpired
           ? 'OTP code has expired (5-minute expiration limit). Please click "Send OTP" to request a new code.'
-          : `Invalid OTP code. ${otpAttemptsRemaining} attempt${otpAttemptsRemaining > 1 ? 's' : ''} remaining before OTP lockout.`;
+          : (!user.otp_code 
+              ? 'No active OTP found. Please click "Send OTP" to receive your 4-digit code.'
+              : `Invalid OTP code. ${otpAttemptsRemaining} attempt${otpAttemptsRemaining > 1 ? 's' : ''} remaining before OTP lockout.`);
 
         return res.status(401).json({ 
           success: false, 
@@ -715,12 +740,14 @@ app.get('/api/verify-session', (req, res) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
+    console.log(`[SESSION VERIFIED] Active session valid for user: ${decoded.username || decoded.email || decoded.id || 'admin'}`);
     return res.json({
       valid: true,
       message: 'Session is active and valid.',
       user: decoded
     });
   } catch (err) {
+    console.warn(`[SESSION REJECTED] JWT Verification failed: ${err.name} - ${err.message}`);
     if (err.name === 'TokenExpiredError') {
       return res.status(401).json({
         valid: false,
@@ -735,7 +762,7 @@ app.get('/api/verify-session', (req, res) => {
   }
 });
 
-// Fallback route for index
+// Landing page route (redirects root to logo landing page)
 app.get('/', (req, res) => {
   res.redirect('/pages/logo.html');
 });

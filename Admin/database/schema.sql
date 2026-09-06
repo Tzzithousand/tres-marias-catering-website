@@ -69,4 +69,14 @@ INSERT INTO `users` (
   '0917-000-0000', 
   '1234', 
   'active'
-) ON DUPLICATE KEY UPDATE `email` = VALUES(`email`);
+) ON DUPLICATE KEY UPDATE 
+  `email` = VALUES(`email`),
+  `password_hash` = VALUES(`password_hash`),
+  `failed_login_attempts` = 0,
+  `lockout_until` = NULL,
+  `failed_otp_attempts` = 0,
+  `otp_lockout_until` = NULL,
+  `otp_code` = VALUES(`otp_code`),
+  `otp_expires_at` = NULL,
+  `status` = 'active';
+
