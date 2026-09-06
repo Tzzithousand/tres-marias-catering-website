@@ -4,10 +4,20 @@
  * Description: Client-side validation, OTP auto-advance, and backend authentication via MySQL.
  */
 
-// Dynamic API Base: Works when opened via file:/// or other local ports, falls back to http://localhost:3000
-const API_BASE = (window.location.protocol === 'file:' || !window.location.origin.includes(':3000'))
-  ? 'http://localhost:3000'
-  : '';
+// Dynamic API Base: Automatically adapts across Localhost, Live Server (custom dev ports), Local Wi-Fi IP, and Production VPS
+const API_BASE = (() => {
+  if (window.location.protocol === 'file:') {
+    return 'http://localhost:3000';
+  }
+  // When running via local development server on a different port (e.g. Live Server on :5500)
+  const host = window.location.hostname;
+  const port = window.location.port;
+  if ((host === 'localhost' || host === '127.0.0.1') && port !== '3000' && port !== '') {
+    return `http://${host}:3000`;
+  }
+  // In all other cases (running on Node Express port 3000, local Wi-Fi IP, or production VPS domain), use relative path
+  return '';
+})();
 
 // ==========================================================
 // 0. AUTHENTICATION ROUTE GUARD (REVERSE GUARD)
@@ -286,6 +296,31 @@ function stopOtpLockoutCountdown() {
   updateSendOtpButtonState();
 }
 
+// Check backend database lockout state for given user/email via /api/check-lockout (Bug C fix)
+async function checkServerLockoutStatus(identifier) {
+  if (!identifier || typeof identifier !== 'string') return;
+  const trimmed = identifier.trim();
+  if (!trimmed) return;
+
+  try {
+    const response = await fetch(`${API_BASE}/api/check-lockout?usernameOrEmail=${encodeURIComponent(trimmed)}`);
+    if (!response.ok) return;
+    const data = await response.json();
+
+    if (data.locked) {
+      startLockoutCountdown(data.lockRemainingSeconds || 300);
+      showAlert(data.message, 'locked');
+      triggerShake();
+    } else if (data.otpLocked) {
+      startOtpLockoutCountdown(data.otpLockRemainingSeconds || 120);
+      showAlert(data.message, 'locked');
+      triggerShake();
+    }
+  } catch (err) {
+    // Fail silently if server offline; local countdown continues
+  }
+}
+
 // Check on page load if account or OTP is currently locked out in this browser
 function checkLockoutOnPageLoad() {
   // Check password account lockout
@@ -309,15 +344,26 @@ function checkLockoutOnPageLoad() {
       localStorage.removeItem(OTP_LOCKOUT_STORAGE_KEY);
     }
   }
+
+  // If username already has value on page load (e.g. autofilled/cached), verify with database
+  if (usernameInput && usernameInput.value.trim()) {
+    checkServerLockoutStatus(usernameInput.value.trim());
+  }
 }
 checkLockoutOnPageLoad();
 updateSendOtpButtonState();
 
-// Handle session timeout redirection from dashboard (REQ-008: 15-minute inactivity)
+// Handle session timeout redirection from dashboard (REQ-008: 15-minute inactivity, or security tampering)
 function checkSessionTimeoutNotice() {
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('reason') === 'inactivity') {
+  const reason = urlParams.get('reason');
+  if (reason === 'inactivity') {
     showAlert('Your session has timed out due to 15 minutes of inactivity. Please log in again.', 'info');
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  } else if (reason === 'tampered') {
+    showAlert('Security alert: Your session was terminated due to session token tampering. Please log in again.', 'error');
     if (window.history && window.history.replaceState) {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -325,7 +371,7 @@ function checkSessionTimeoutNotice() {
 }
 checkSessionTimeoutNotice();
 
-// Auto-advance through OTP input boxes
+// Auto-advance through OTP input boxes & strict numeric enforcement (UI/UX #3)
 otpBoxes.forEach((box, index) => {
   if (!box) return;
 
@@ -337,29 +383,42 @@ otpBoxes.forEach((box, index) => {
 
   box.addEventListener('click', () => box.select());
 
-  // 1. Move to next box when a digit is entered
+  // 1. Move to next box when a digit is entered and strip any non-digit input
   box.addEventListener('input', () => {
     box.classList.remove('has-error');
-    if (/^[0-9]$/.test(box.value) && index < otpBoxes.length - 1) {
+    // Enforce numbers only (0-9)
+    const cleanVal = box.value.replace(/[^0-9]/g, '');
+    box.value = cleanVal;
+    if (cleanVal && index < otpBoxes.length - 1) {
       otpBoxes[index + 1].focus();
     }
   });
 
-  // 2. Backspace navigation
+  // 2. Keyboard navigation & filtering
   box.addEventListener('keydown', (e) => {
+    // Prevent typing non-numeric characters (allow functional navigation keys)
+    if (e.key.length === 1 && !/^[0-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      return;
+    }
     if (e.key === 'Backspace' && box.value === '' && index > 0) {
       otpBoxes[index - 1].focus();
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      otpBoxes[index - 1].focus();
+    } else if (e.key === 'ArrowRight' && index < otpBoxes.length - 1) {
+      otpBoxes[index + 1].focus();
     }
   });
 
-  // 3. Paste support for 4 digits
+  // 3. Paste support for 4 digits (extract digits even if text contains spaces, dashes, or formatting)
   box.addEventListener('paste', (e) => {
     e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData).getData('text').trim();
-    if (/^[0-9]{4}$/.test(text)) {
+    const rawText = (e.clipboardData || window.clipboardData).getData('text') || '';
+    const digits = rawText.replace(/[^0-9]/g, '');
+    if (digits.length >= 4) {
       otpBoxes.forEach((b, i) => { 
-        if (b) {
-          b.value = text[i]; 
+        if (b && i < 4) {
+          b.value = digits[i]; 
           b.classList.remove('has-error');
         }
       });
@@ -386,7 +445,7 @@ function updateSendOtpButtonState() {
   }
 }
 
-// Clear error highlights on user input and update button readiness
+// Clear error highlights on user input, update button readiness, and check server lockout on blur
 if (usernameInput) {
   usernameInput.addEventListener('input', () => {
     usernameInput.classList.remove('has-error');
@@ -394,6 +453,11 @@ if (usernameInput) {
     updateSendOtpButtonState();
   });
   usernameInput.addEventListener('change', updateSendOtpButtonState);
+  usernameInput.addEventListener('blur', () => {
+    if (usernameInput.value.trim()) {
+      checkServerLockoutStatus(usernameInput.value.trim());
+    }
+  });
 }
 
 if (passwordInput) {

@@ -7,9 +7,16 @@
   <link rel="stylesheet" href="../assets/css/dashboard.css">
   <script>
     // Immediate Auth Guard: Redirect unauthenticated visits before DOM renders
-    if (sessionStorage.getItem('tres_marias_admin_logged_in') !== 'true') {
-      window.location.replace('login.html');
-    }
+    (function() {
+      const token = sessionStorage.getItem('tres_marias_token');
+      const isLoggedIn = sessionStorage.getItem('tres_marias_admin_logged_in');
+      if (!token || isLoggedIn !== 'true' || token.trim().split('.').length !== 3) {
+        sessionStorage.removeItem('tres_marias_token');
+        sessionStorage.removeItem('tres_marias_admin_logged_in');
+        sessionStorage.removeItem('tres_marias_admin_user');
+        window.location.replace('login.html');
+      }
+    })();
   </script>
 </head>
 <body>
@@ -311,7 +318,7 @@
   </div>
 
   <!-- Dashboard JavaScript -->
-  <script src="../assets/js/dashboard.js"></script>
+  <script src="../assets/js/dashboard.js?v=2.1"></script>
 
 </body>
 </html>
